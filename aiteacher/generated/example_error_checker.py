@@ -6,9 +6,7 @@ from error_checker import ErrorChecker, GrammarError, VocabularyItem
 
 # Create error checker for Spanish
 checker = ErrorChecker(
-    language="Spanish",
-    level="intermediate",
-    native_language="English"
+    language="Spanish", level="intermediate", native_language="English"
 )
 
 # Check a sentence (this is a stub - in production it would call OpenAI API)

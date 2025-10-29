@@ -24,38 +24,35 @@ errors = [
         incorrect_text="yo es",
         corrected_text="yo soy",
         explanation="'Ser' conjugates as 'soy' for 'yo'",
-        severity="major"
+        severity="major",
     ),
     GrammarError(
         error_type="article",
         incorrect_text="un casa",
         corrected_text="una casa",
         explanation="'Casa' is feminine, use 'una'",
-        severity="medium"
-    )
+        severity="medium",
+    ),
 ]
 stats.record_errors(errors)
 
 # Record vocabulary
 vocabulary = [
     VocabularyItem(
-        word="casa",
-        translation="house",
-        context="Mi casa es grande",
-        difficulty="easy"
+        word="casa", translation="house", context="Mi casa es grande", difficulty="easy"
     ),
     VocabularyItem(
         word="estudiante",
         translation="student",
         context="Soy estudiante",
-        difficulty="easy"
+        difficulty="easy",
     ),
     VocabularyItem(
         word="biblioteca",
         translation="library",
         context="Voy a la biblioteca",
-        difficulty="medium"
-    )
+        difficulty="medium",
+    ),
 ]
 stats.record_vocabulary(vocabulary)
 
@@ -80,6 +77,6 @@ print("Vocabulary exported to spanish_vocabulary.csv")
 
 # Show what the CSV looks like
 print("\nAnki CSV contents:")
-with open("spanish_vocabulary.csv", 'r', encoding='utf-8') as f:
+with open("spanish_vocabulary.csv", "r", encoding="utf-8") as f:
     for line in f:
         print(f"  {line.strip()}")
