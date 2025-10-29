@@ -4,70 +4,80 @@ import argparse
 import sys
 import json
 from pathlib import Path
-from config import AppConfig, LanguageConfig, VoiceConfig, StatisticsConfig
+from typing import Any, Optional
+from config import AppConfig, LanguageConfig, VoiceConfig, StatisticsConfig, create_config_interactive
 from main import ConversationalTeacher
 
 
-def create_config_interactive() -> AppConfig:
-    """Create configuration interactively."""
-    print("\nConfiguration Setup")
-    print("=" * 60)
+def _add_start_subparser(subparsers: argparse._SubParsersAction, name: str) -> None:
+    """Add start subparser for the CLI.
+    
+    Args:
+        subparsers (argparse._SubParsersAction): The subparsers object to add the start command to.
+        name (str): The name of the start command.
+    """
+    start_parser = subparsers.add_parser(name, help="Start a practice session")
+    start_parser.add_argument("--config", type=str, help="Path to configuration file")
 
-    # Language settings
-    language = (
-        input("Target language (e.g., Spanish, French, German) [Spanish]: ").strip()
-        or "Spanish"
+
+def _add_config_subparser(subparsers: argparse._SubParsersAction, name: str = "config") -> None:
+    """Add configuration subparser for the CLI.
+    
+    Args:
+        subparsers (argparse._SubParsersAction): The subparsers object to add the config command to.
+        name (str): The name of the config command. Defaults to "config".
+    """
+    config_parser = subparsers.add_parser(name, help="Manage configuration")
+    config_parser.add_argument(
+        "--create", action="store_true", help="Create a new configuration interactively"
     )
-    level = (
-        input("Your level (beginner/intermediate/advanced) [beginner]: ").strip()
-        or "beginner"
+    config_parser.add_argument(
+        "--output",
+        type=str,
+        default="config.json",
+        help="Output path for configuration file",
     )
-    native_language = input("Your native language [English]: ").strip() or "English"
+    config_parser.add_argument("--show", type=str, help="Show configuration from file")
 
-    # Voice settings
-    voice_enabled_input = input("Enable voice interface? (y/n) [n]: ").strip().lower()
-    voice_enabled = voice_enabled_input in ["y", "yes"]
 
-    auto_listen = False
-    if voice_enabled:
-        auto_listen_input = (
-            input("Auto-listen after AI responds? (y/n) [n]: ").strip().lower()
-        )
-        auto_listen = auto_listen_input in ["y", "yes"]
+def _add_stats_subparser(subparsers: argparse._SubParsersAction, name: str = "stats") -> None:
+    """Add statistics subparser for the CLI.
+    
+    Args:
+        subparsers (argparse._SubParsersAction): The subparsers object to add the stats command to.
+        name (str): The name of the stats command. Defaults to "stats".
+    """
+    stats_parser = subparsers.add_parser(name, help="View statistics")
+    stats_parser.add_argument("--stats-file", type=str, help="Path to statistics file")
 
-    # Statistics settings
-    track_errors_input = input("Track errors? (y/n) [y]: ").strip().lower()
-    track_errors = track_errors_input not in ["n", "no"]
 
-    track_vocabulary_input = input("Track vocabulary? (y/n) [y]: ").strip().lower()
-    track_vocabulary = track_vocabulary_input not in ["n", "no"]
-
-    export_to_anki_input = input("Enable Anki export? (y/n) [y]: ").strip().lower()
-    export_to_anki = export_to_anki_input not in ["n", "no"]
-
-    # OpenAI API key (optional for now)
-    api_key = input("OpenAI API key (optional, press Enter to skip): ").strip()
-
-    # Create config
-    config = AppConfig(
-        language=LanguageConfig(
-            language=language, level=level, native_language=native_language
-        ),
-        voice=VoiceConfig(enabled=voice_enabled, auto_listen=auto_listen),
-        statistics=StatisticsConfig(
-            track_errors=track_errors,
-            track_vocabulary=track_vocabulary,
-            export_to_anki=export_to_anki,
-        ),
-        openai_api_key=api_key,
+def _add_export_subparser(subparsers: argparse._SubParsersAction, name: str = "export") -> None:
+    """Add export subparser for the CLI.
+    
+    Args:
+        subparsers (argparse._SubParsersAction): The subparsers object to add the export command to.
+        name (str): The name of the export command. Defaults to "export".
+    """
+    export_parser = subparsers.add_parser(name, help="Export vocabulary to Anki")
+    export_parser.add_argument(
+        "--stats-file", type=str, required=True, help="Path to statistics file"
     )
-
-    print("\nConfiguration created successfully!")
-    return config
+    export_parser.add_argument("--output", type=str, help="Output path for Anki export")
 
 
-def main():
-    """Main CLI entry point."""
+
+def main() -> None:
+    """Main CLI entry point.
+    
+    Parses command line arguments and executes the appropriate command.
+    Supports start, config, stats, and export commands.
+    
+    Commands:
+        start: Start a practice session with optional config file
+        config: Create or show configuration files
+        stats: Display statistics from a statistics file
+        export: Export vocabulary to Anki format
+    """
     parser = argparse.ArgumentParser(
         description="AI Conversational Teacher - Practice languages with AI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -89,33 +99,11 @@ Examples:
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
-    # Start command
-    start_parser = subparsers.add_parser("start", help="Start a practice session")
-    start_parser.add_argument("--config", type=str, help="Path to configuration file")
-
-    # Config command
-    config_parser = subparsers.add_parser("config", help="Manage configuration")
-    config_parser.add_argument(
-        "--create", action="store_true", help="Create a new configuration interactively"
-    )
-    config_parser.add_argument(
-        "--output",
-        type=str,
-        default="config.json",
-        help="Output path for configuration file",
-    )
-    config_parser.add_argument("--show", type=str, help="Show configuration from file")
-
-    # Stats command
-    stats_parser = subparsers.add_parser("stats", help="View statistics")
-    stats_parser.add_argument("--stats-file", type=str, help="Path to statistics file")
-
-    # Export command
-    export_parser = subparsers.add_parser("export", help="Export vocabulary to Anki")
-    export_parser.add_argument(
-        "--stats-file", type=str, required=True, help="Path to statistics file"
-    )
-    export_parser.add_argument("--output", type=str, help="Output path for Anki export")
+    # Add subparsers using dedicated functions
+    _add_start_subparser(subparsers, "start")
+    _add_config_subparser(subparsers, "config")
+    _add_stats_subparser(subparsers, "stats")
+    _add_export_subparser(subparsers, "export")
 
     args = parser.parse_args()
 
@@ -146,7 +134,8 @@ Examples:
             print("=" * 60)
 
         else:
-            config_parser.print_help()
+            print("Error: Please specify either --create or --show option.")
+            print("Use 'python cli.py config --help' for more information.")
 
     elif args.command == "stats":
         if not args.stats_file or not Path(args.stats_file).exists():
@@ -154,8 +143,8 @@ Examples:
             print("Use --stats-file to specify the statistics file.")
             sys.exit(1)
 
-        from statistics import StatisticsTracker
-
+        from .statistics import StatisticsTracker
+        
         stats = StatisticsTracker.load_from_file(args.stats_file)
 
         summary = stats.get_summary()
@@ -170,8 +159,8 @@ Examples:
             print(f"Error: Statistics file not found: {args.stats_file}")
             sys.exit(1)
 
-        from statistics import StatisticsTracker
-        from anki_exporter import AnkiExporter
+        from .statistics import StatisticsTracker
+        from .anki_exporter import AnkiExporter
 
         stats = StatisticsTracker.load_from_file(args.stats_file)
 
