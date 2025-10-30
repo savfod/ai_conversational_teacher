@@ -82,13 +82,13 @@ class AudioParser:
         # self._audio_buffer.append((np.clip(audio_chunk, -1.0, 1.0) * 32767).astype(np.int16))
         # normalize
         audio_chunk = audio_chunk
-        self._audio_buffer.append((np.clip(audio_chunk, -1.0, 1.0) * 32767).astype(np.int16))
+        self._audio_buffer.append((np.clip(audio_chunk, -1.0, 1.0) * 32767).astype(np.int16).copy())
 
         
         # joined_audio = np.concatenate(self._audio_buffer)
         joined_audio = self._audio_buffer[-1]  # vosk has that already :/
 
-        print(f"Processing audio chunk of {len(joined_audio) / self.sample_rate:.3f} seconds")
+        # print(f"Processing audio chunk of {len(joined_audio) / self.sample_rate:.3f} seconds")
         # looking max 2 seconds of audio for commands
         joined_audio = joined_audio[-2 * self.sample_rate:]
 
@@ -100,7 +100,7 @@ class AudioParser:
             print(f"Detected speech: '{detected_text}'")
             
 
-            start_words = ["start", "go", "begin", "startup"]
+            start_words = ["start", "go", "begin", "startup", "stuff"]
             if any(word in detected_text.lower() for word in start_words) and self._status == "waiting":
                 self._start_detected = True
                 self._status = "listening"

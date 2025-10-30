@@ -4,6 +4,10 @@ config.json
 # *.csv
 # !.env.example
 
+# tmp
+vosk-model-small-en-us-0.15
+audio/speech_2025*
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
