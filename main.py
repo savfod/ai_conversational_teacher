@@ -14,8 +14,9 @@ def main():
     print("Starting MicrophoneInputStream...")
 
     if sys.argv[1:] and sys.argv[1] == "file":
+        file_path = sys.argv[2] if len(sys.argv) > 2 else "data/test_audio/error1.wav"
         input_stream = AudioFileInputStream(
-            file_path="aiteacher/audio/start_stop.mp3",
+            file_path=file_path,
         )
         input_stream.start()
         print("Audio file stream started.")

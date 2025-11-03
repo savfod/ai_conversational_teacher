@@ -147,7 +147,12 @@ def speech_to_text(audio_bytes: bytes, language: Optional[str] = "en", sample_ra
         if language:
             params["language"] = language
 
-        resp = client.audio.transcriptions.create(**params)
+        resp = client.audio.transcriptions.create(
+            **params, 
+            prompt="Please transcribe the following audio precisely (don't fix mistakes)."
+        )
+        print(resp)
+
 
         # Prefer attribute access which is the usual shape for the v1 SDK
         try:
