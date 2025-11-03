@@ -8,6 +8,7 @@ from aiteacher.audio.audio_parser import AudioParser
 from aiteacher.audio.input_stream import AudioFileInputStream, MicrophoneInputStream
 from aiteacher.generated.llm import answer
 from aiteacher.generated.speech_api import speech_to_text, text_to_speech
+from aiteacher.util.logs import setup_logging
 from aiteacher.scenario.find_errors import check_for_errors
 
 
@@ -43,12 +44,11 @@ def send_tone_signal(output_stream, signal: str):
 
 
 
-def main():
+def main(file_path: str | None = None):
     """Main function to demonstrate MicrophoneInputStream usage."""
     print("Starting MicrophoneInputStream...")
 
-    if sys.argv[1:] and sys.argv[1] == "file":
-        file_path = sys.argv[2] if len(sys.argv) > 2 else "data/test_audio/error1.wav"
+    if file_path is not None:
         input_stream = AudioFileInputStream(
             file_path=file_path,
         )
@@ -125,4 +125,11 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    setup_logging(level="INFO")
+
+    if sys.argv[1:] and sys.argv[1] == "file":
+        file_path = sys.argv[2] if len(sys.argv) > 2 else "data/test_audio/error1.wav"
+    else:
+        file_path = None
+
+    main(file_path=file_path)
