@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 import wave
 from io import BytesIO
-from typing import Optional
+from typing import Optional, Union, Any
 
 import librosa
 import numpy as np
@@ -51,14 +51,18 @@ def _ensure_openai_available() -> None:
         raise RuntimeError("OPENAI_API_KEY is not set in the environment")
 
 
-def _get_client():
+def _get_client() -> Any:
     """Create and return an OpenAI v1 client instance.
 
     This function expects the installed `openai` package to expose an
     `OpenAI` client class (openai.OpenAI) as introduced in openai>=1.0.0.
 
+    Returns:
+        An OpenAI client instance (shape depends on installed SDK).
+
     Raises:
-        RuntimeError: If the OpenAI client class is not present.
+        RuntimeError: If the OpenAI client class is not present or cannot be
+            constructed.
     """
     api_key = _get_api_key()
     try:
@@ -71,14 +75,16 @@ def _get_client():
         ) from exc
 
 
-def speech_to_text(audio_bytes: np.ndarray, language: Optional[str] = "en", sample_rate: int = 16000, *, model: str = "gpt-4o-mini-transcribe") -> str:
-    """Transcribe audio chunk to text using an OpenAI model.
+def speech_to_text(audio_bytes: Union[bytes, bytearray, np.ndarray], language: Optional[str] = "en", sample_rate: int = 16000, *, model: str = "gpt-4o-mini-transcribe") -> str:
+    """Transcribe audio to text using an OpenAI model.
 
     Args:
-        audio_bytes: Raw audio bytes (e.g., WAV, MP3, or supported format).
+        audio_bytes: Either raw audio container bytes (WAV/MP3) or a numeric
+            numpy array of samples (float32 or integer). If a numpy array is
+            provided it will be converted to 16-bit PCM WAV for the API.
         language: Optional BCP-47 language code hint (e.g., "en", "es").
-        model: Model name to use for transcription. Default chosen to a recent
-            speech-to-text capable model. Change if required.
+        sample_rate: Sample rate to assume for numpy-array inputs.
+        model: Model name to use for transcription.
 
     Returns:
         The transcribed text.
@@ -181,16 +187,18 @@ def speech_to_text(audio_bytes: np.ndarray, language: Optional[str] = "en", samp
         raise RuntimeError(f"speech_to_text failed: {exc}") from exc
 
 
-def text_to_speech(text: str, *, model: str = "gpt-4o-mini-tts", voice: Optional[str] = None, instructions: Optional[str] = None) -> bytes:
-    """Synthesize speech bytes from text using an OpenAI model.
+def text_to_speech(text: str, *, model: str = "gpt-4o-mini-tts", voice: Optional[str] = None, instructions: Optional[str] = None) -> np.ndarray:
+    """Synthesize speech from text using an OpenAI model and return audio samples.
 
     Args:
         text: The input text to synthesize.
-        model: The TTS model name to use. Default set to a recent TTS-capable model.
+        model: The TTS model name to use.
         voice: Optional voice selection string, if supported by the model.
+        instructions: Optional additional instructions for voice/style.
 
     Returns:
-        Raw audio bytes (e.g., WAV or MP3) as returned by the API.
+        A numpy array of float32 samples (mono, 16 kHz) containing the
+        synthesized audio.
 
     Raises:
         RuntimeError: If the OpenAI package or API key is missing, or if
@@ -227,9 +235,9 @@ def text_to_speech(text: str, *, model: str = "gpt-4o-mini-tts", voice: Optional
         data = librosa.resample(data.T, orig_sr=samplerate, target_sr=16000).T
     
 
-    # Clean up the temporary file
+    # Clean up the temporary file (keep for debugging during development)
     # speech_file_path.unlink()
-    
+
     return data
 
     # try:

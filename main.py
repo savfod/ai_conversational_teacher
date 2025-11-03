@@ -12,8 +12,16 @@ from aiteacher.util.logs import setup_logging
 from aiteacher.scenario.find_errors import check_for_errors
 
 
-def send_tone_signal(output_stream, signal: str):
-    """Play a short tone to signal state change"""
+def send_tone_signal(output_stream: "sd.OutputStream", signal: str) -> None:
+    """Play a short tone to signal state change.
+
+    Args:
+        output_stream: A sounddevice OutputStream used to write the generated tone.
+        signal: A textual signal, e.g. 'listening' or other values to select tone.
+
+    Returns:
+        None
+    """
 
     def _generate_tone(freq: float, duration: float = 0.15, sample_rate: int = 16000, amplitude: float = 0.25) -> np.ndarray:
         """Generate a simple sine tone (mono) as float32 numpy array.
@@ -44,8 +52,21 @@ def send_tone_signal(output_stream, signal: str):
 
 
 
-def main(file_path: str | None = None):
-    """Main function to demonstrate MicrophoneInputStream usage."""
+def main(file_path: str | None = None) -> None:
+    """Main entry point for demo application.
+
+    This function starts either a microphone input stream or an audio-file-based
+    input stream, processes audio to detect speech intervals, sends them to a
+    speech-to-text service, checks for language errors, and uses an LLM to
+    produce replies which are played back.
+
+    Args:
+        file_path: Optional path to an audio file. If provided, the file input
+            stream is used; otherwise the microphone is used.
+
+    Returns:
+        None
+    """
     print("Starting MicrophoneInputStream...")
 
     if file_path is not None:

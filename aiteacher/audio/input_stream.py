@@ -36,7 +36,14 @@ class AudioBuffer:
         self._lock = threading.Lock()
         
     def add_audio(self, audio_data: np.ndarray) -> None:
-        """Add audio data to buffer with automatic trimming."""
+        """Add audio data to the buffer with automatic trimming.
+
+        Args:
+            audio_data: A numpy array of samples (mono or multi-channel).
+
+        Returns:
+            None
+        """
         with self._lock:
             self._buffer.extend(audio_data.flatten())
             
@@ -48,7 +55,12 @@ class AudioBuffer:
                       f"({trim_amount / self.sample_rate:.2f} seconds)")
     
     def get_and_clear(self) -> np.ndarray:
-        """Get all buffered audio and clear the buffer."""
+        """Return all buffered audio as a numpy array and clear the buffer.
+
+        Returns:
+            A numpy array of dtype float32 containing the buffered audio
+            samples. An empty array is returned if no audio was buffered.
+        """
         with self._lock:
             if not self._buffer:
                 return np.array([])
@@ -58,7 +70,11 @@ class AudioBuffer:
             return audio_data
     
     def get_duration(self) -> float:
-        """Get current buffer duration in seconds."""
+        """Get current buffer duration in seconds.
+
+        Returns:
+            Buffer duration in seconds.
+        """
         with self._lock:
             return len(self._buffer) / self.sample_rate if self._buffer else 0.0
 
@@ -82,11 +98,19 @@ class AbstractAudioInputStream(abc.ABC):
     
     @abc.abstractmethod
     def _audio_processing_loop(self) -> None:
-        """Internal audio processing loop to be implemented by subclasses."""
-        pass
+        """Internal audio processing loop to be implemented by subclasses.
+
+        Subclasses should implement this method to push audio into
+        `self._buffer` while `self._is_running` is True.
+        """
+        raise NotImplementedError()
     
     def start(self) -> None:
-        """Start the audio input stream."""
+        """Start the audio input stream in a background thread.
+
+        Returns:
+            None
+        """
         if self._is_running:
             return
             
@@ -96,24 +120,31 @@ class AbstractAudioInputStream(abc.ABC):
         print(f"Started {self.__class__.__name__}")
     
     def stop(self) -> None:
-        """Stop the audio input stream."""
+        """Stop the audio input stream and join the background thread.
+
+        Returns:
+            None
+        """
         self._is_running = False
         if self._thread and self._thread.is_alive():
             self._thread.join()
         print(f"Stopped {self.__class__.__name__}")
     
     def get_unprocessed_chunk(self) -> Optional[np.ndarray]:
-        """
-        Get currently buffered audio data.
-        
+        """Get currently buffered audio data.
+
         Returns:
-            Audio chunk as numpy array, or None if no data available
+            Audio chunk as numpy array, or None if no data available.
         """
         chunk = self._buffer.get_and_clear()
         return chunk if len(chunk) > 0 else None
     
     def get_buffer_duration(self) -> float:
-        """Get current buffer duration in seconds."""
+        """Get current buffer duration in seconds.
+
+        Returns:
+            Buffer duration in seconds (float).
+        """
         return self._buffer.get_duration()
 
 
@@ -138,7 +169,17 @@ class MicrophoneInputStream(AbstractAudioInputStream):
     
     def _audio_callback(self, indata: np.ndarray, frames: int, 
                        time_info, status) -> None:
-        """Callback function for sounddevice stream."""
+        """Callback function for sounddevice InputStream.
+
+        Args:
+            indata: Incoming audio samples as numpy array (frames, channels).
+            frames: Number of frames in this callback.
+            time_info: Timing information provided by sounddevice.
+            status: Callback status object from sounddevice.
+
+        Returns:
+            None
+        """
         if status:
             print(f"Audio callback status: {status}")
         
@@ -146,7 +187,11 @@ class MicrophoneInputStream(AbstractAudioInputStream):
         self._buffer.add_audio(indata)
     
     def _audio_processing_loop(self) -> None:
-        """Audio processing loop for microphone input."""
+        """Audio processing loop for microphone input.
+
+        This opens a sounddevice InputStream and runs until `self._is_running`
+        is cleared.
+        """
         try:
             with sd.InputStream(
                 samplerate=self.sample_rate,
@@ -190,11 +235,13 @@ class AudioFileInputStream(AbstractAudioInputStream):
         # This allows for fallback behavior if file doesn't exist
     
     def _load_and_convert_mp3(self) -> np.ndarray:
-        """
-        Load and convert MP3 file to numpy array using librosa.
-        
+        """Load and convert an audio file to a numpy array using librosa.
+
         Returns:
-            Audio data as numpy array
+            Audio data as a 1-D numpy array of dtype float32 (mono).
+
+        Raises:
+            FileNotFoundError: If the audio file does not exist.
         """
         # Check if file exists first
         if not self.file_path.exists():
@@ -214,7 +261,11 @@ class AudioFileInputStream(AbstractAudioInputStream):
         return audio_data.astype(np.float32)
                 
     def _audio_processing_loop(self) -> None:
-        """Audio processing loop for MP3 file input."""
+        """Audio processing loop for MP3/file input.
+
+        Reads the file, splits into chunks of `self.chunk_duration` and
+        appends them to the internal buffer to simulate real-time input.
+        """
         try:
             # Load the entire audio file
             audio_data = self._load_and_convert_mp3()
@@ -247,21 +298,28 @@ class AudioFileInputStream(AbstractAudioInputStream):
 
 
 def _simulate_wait() -> None:
+    """Simulate a CPU-bound processing delay (debug/demo helper).
+
+    This function intentionally performs a busy CPU loop for a short while
+    and then sleeps; it's only intended for stub/demo scenarios.
+    """
     start = datetime.now()
     print(f"[{start}] Processing audio chunk...")
-    # simulate processing delay 
+    # simulate processing delay
     while datetime.now() - start < timedelta(seconds=3):
         a = np.zeros([3000,3000]) @ np.zeros([3000,3000])
     time.sleep(1)
 
 
 def _stub_wav_processor(input_stream: AbstractAudioInputStream, output_dir: str = "out") -> None:
-    """
-    Stub WAV processor that continuously processes audio chunks.
-    
+    """Stub WAV processor that continuously processes audio chunks.
+
     Args:
-        input_stream: Audio input stream instance
-        output_dir: Output directory for saved chunks
+        input_stream: Audio input stream instance.
+        output_dir: Output directory for saved chunks.
+
+    Returns:
+        None
     """
     print("Starting stub WAV processor...")
     

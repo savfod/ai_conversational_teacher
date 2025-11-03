@@ -48,13 +48,27 @@ class AudioParser:
 
     @staticmethod
     def _has_start_seq(text: str) -> bool:
-        """Check if the text contains a start command."""
+        """Check if the text contains a start command.
+
+        Args:
+            text: Recognized text to inspect.
+
+        Returns:
+            True if a start-like token is present, False otherwise.
+        """
         start_words = ["start", "go", "begin", "that", "startup"]  # not too accurate on 'start'
         return any(word in text.lower() for word in start_words)
 
     @staticmethod
     def _has_stop_seq(text: str) -> bool:
-        """Check if the text contains a stop command."""
+        """Check if the text contains a stop command.
+
+        Args:
+            text: Recognized text to inspect.
+
+        Returns:
+            True if a stop-like token pattern is present, False otherwise.
+        """
         return text.lower().count("stop") > 1
 
     def add_chunk(self, audio_chunk: np.ndarray) -> Tuple[Status, Optional[np.ndarray], bool]:
@@ -114,13 +128,15 @@ class AudioParser:
         return int16_chunk.tobytes()
 
     def _add_vosk_chunk(self, audio_chunk: np.ndarray) -> str:
-        """Process new audio chunk through Vosk and return recognized text. 
-        
+        """Process a new audio chunk through Vosk and return recognized text.
+
         Args:
-            audio_data: Raw audio data as bytes (16-bit PCM).
-            
+            audio_chunk: Audio samples as a numpy array (float32, mono or multi-channel).
+
         Returns:
-            Recognized text if smth was detected, None otherwise.
+            Recognized text (possibly empty string) produced by Vosk for the
+            supplied chunk. Partial results are returned as a short string
+            starting with a space; full results are returned as the text.
         """
         # vosk processes new chunk, saving partial results, and removing buffer with saving full results
         # todo: switch to manual logic with recognize(), not add_chunk()
@@ -165,7 +181,14 @@ class AudioParser:
         total_samples = sum(len(chunk) for chunk in self._audio_buffer)
         return total_samples / self.sample_rate
     
-    def reset(self) -> None:
-        """Reset the parser to initial state."""
-        print("Resetting audio parser state")
-        self._reset_state()
+    # def reset(self) -> None:
+    #     """Reset the parser to the initial state.
+
+    #     This clears any buffered audio and resets the Vosk recognizer and
+    #     parser status to the initial 'waiting' state.
+    #     """
+    #     print("Resetting audio parser state")
+    #     self._audio_buffer = []
+    #     self._vosk_parsed_buffer = []
+    #     self._status = "waiting"
+    #     self._reset_vosk()

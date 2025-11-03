@@ -25,14 +25,26 @@ Ignore the word "start" in the beginning of the conversation and the word "stop"
 """
 
 def check_for_errors(query: str) -> str:
-    """Check the input text for errors and return a structured response."""
+    """Analyze input text for language errors and return a human-readable report.
+
+    This function calls an LLM-based structured parser to identify language
+    errors in the supplied `query`, then formats the returned structured
+    information into a readable multi-line string suitable for TTS or printing.
+
+    Args:
+        query: User-provided text to analyze.
+
+    Returns:
+        A formatted string describing each detected error. Returns an empty
+        string when no errors are found.
+    """
     errs = answer_structured_simple(
         query=query,
         sys_prompt=SYS_PROMPT_ERRORS,
         answer_format=Errors,
     )
 
-    errs_answers = []
+    errs_answers: list[str] = []
 
     for err in errs.errors:
         errs_answers.append(
