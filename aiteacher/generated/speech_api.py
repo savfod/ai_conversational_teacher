@@ -17,6 +17,7 @@ from typing import Optional
 from dotenv import load_dotenv
 
 import librosa
+import numpy as np
 import openai
 from io import BytesIO
 import wave
@@ -25,6 +26,10 @@ import soundfile as sf
 
 # Load environment variables from a .env file if present
 load_dotenv()
+
+DEBUG = os.getenv("DEBUG_SPEECH_API", "0") == "1"
+if DEBUG:
+    print("DEBUG_SPEECH_API is enabled - verbose logging active.")
 
 
 def _get_api_key() -> Optional[str]:
@@ -68,7 +73,7 @@ def _get_client():
         ) from exc
 
 
-def speech_to_text(audio_bytes: bytes, language: Optional[str] = "en", sample_rate: int = 16000, *, model: str = "gpt-4o-mini-transcribe") -> str:
+def speech_to_text(audio_bytes: np.ndarray, language: Optional[str] = "en", sample_rate: int = 16000, *, model: str = "gpt-4o-mini-transcribe") -> str:
     """Transcribe audio chunk to text using an OpenAI model.
 
     Args:
@@ -93,6 +98,12 @@ def speech_to_text(audio_bytes: bytes, language: Optional[str] = "en", sample_ra
         # file like WAV/MP3) or a numeric array (e.g., numpy.ndarray of
         # float32 samples).
         client = _get_client()
+
+        if DEBUG:
+            import soundfile as sf
+            # save to temp file and play for debugging
+            sf.write("debug_speech_api_input_raw.wav", audio_bytes, sample_rate, format='WAV')
+
 
         wav_buffer: BytesIO
         if isinstance(audio_bytes, (bytes, bytearray)):
@@ -151,7 +162,13 @@ def speech_to_text(audio_bytes: bytes, language: Optional[str] = "en", sample_ra
             **params, 
             prompt="Please transcribe the following audio precisely (don't fix mistakes)."
         )
-        print(resp)
+
+        if DEBUG:
+            print(resp)
+            # save wav buffer for inspection
+            with open("debug_speech_api_input.wav", "wb") as f:
+                f.write(wav_buffer.getbuffer())
+                f.flush()
 
 
         # Prefer attribute access which is the usual shape for the v1 SDK
