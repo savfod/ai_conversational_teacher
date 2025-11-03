@@ -57,41 +57,49 @@ class AudioParser:
         """Check if the text contains a stop command."""
         return text.lower().count("stop") > 1
 
-    def add_chunk(self, audio_chunk: np.ndarray) -> Tuple[Status, Optional[np.ndarray]]:
+    def add_chunk(self, audio_chunk: np.ndarray) -> Tuple[Status, Optional[np.ndarray], bool]:
         """Add an audio chunk and process it for start/stop detection.
-        
+
         Args:
             audio_chunk: Audio data as numpy array (float32, mono).
-            
+
         Returns:
-            Tuple of (status, optional_audio):
+            Tuple of (status, optional_audio, status_changed):
             - status: "listening" if recording speech, "waiting" if waiting for start command
             - optional_audio: Complete speech interval if stop was just detected, None otherwise
+            - status_changed: True if the parser status changed during this call
         """
+        prev_status = self._status
+
         self._audio_buffer.append(audio_chunk.copy())
         detected_text = self._add_vosk_chunk(audio_chunk.copy())
-        
-        if self._status == "waiting" and self._has_start_seq(detected_text):    
+
+        # Detect start command
+        if self._status == "waiting" and self._has_start_seq(detected_text):
             print("START command detected - now listening for speech")
             self._status = "listening"
             self._audio_buffer = []  # Clear any previous buffer
             self._reset_vosk()
-        
+
+        # Detect stop command
         elif self._status == "listening" and self._has_stop_seq(detected_text):
             print("STOP command detected - processing speech interval")
             self._status = "waiting"
-        
+
             if self._audio_buffer:
                 complete_audio = np.concatenate(self._audio_buffer)
             else:
                 complete_audio = np.array([], dtype=np.float32)
                 print("Warning: no audio buffered between start and stop")
-            
+
             print(f"Returning speech interval: {len(complete_audio) / self.sample_rate:.2f} seconds")
             self._reset_vosk()
-            return self._status, complete_audio
-        
-        return self._status, None
+
+            status_changed = (self._status != prev_status)
+            return self._status, complete_audio, status_changed
+
+        status_changed = (self._status != prev_status)
+        return self._status, None, status_changed
 
     @staticmethod
     def _preprocess_vosk_chunk(audio_chunk: np.ndarray) -> bytes:

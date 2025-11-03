@@ -8,6 +8,39 @@ from aiteacher.generated.llm import answer
 import sys
 
 import sounddevice as sd
+import numpy as np
+
+def send_tone_signal(output_stream, signal: str):
+    """Play a short tone to signal state change"""
+
+    def _generate_tone(freq: float, duration: float = 0.15, sample_rate: int = 16000, amplitude: float = 0.25) -> np.ndarray:
+        """Generate a simple sine tone (mono) as float32 numpy array.
+
+        Args:
+            freq: Frequency in Hz.
+            duration: Duration in seconds.
+            sample_rate: Sample rate in Hz.
+            amplitude: Peak amplitude (0..1).
+
+        Returns:
+            Numpy array of shape (n,) dtype float32.
+        """
+        t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+        tone = amplitude * np.sin(2 * np.pi * freq * t)
+        return tone.astype(np.float32)
+
+    if signal == 'listening':
+        # start tone (higher pitch, short)
+        tone = _generate_tone(freq=880.0, duration=0.12)
+    else:
+        # stop tone (lower pitch, slightly longer)
+        tone = _generate_tone(freq=440.0, duration=0.18)
+    try:
+        output_stream.write(tone)
+    except Exception as e:
+        print(f"Warning: failed to play tone: {e}")
+
+
 
 def main():
     """Main function to demonstrate MicrophoneInputStream usage."""
@@ -35,6 +68,7 @@ def main():
     )
     output_stream.start()
 
+
     prev_status = None
     try:
         while True:
@@ -42,11 +76,11 @@ def main():
             chunk = input_stream.get_unprocessed_chunk()
             if chunk is None:
                 continue
-            
-            status, speech = audio_parser.add_chunk(chunk)
-            if status != prev_status:
-                print(f"Parser status: {status}")
-                prev_status = status
+            assert len(chunk) > 0
+
+            status, speech, status_changed = audio_parser.add_chunk(chunk)
+            if status_changed:
+                send_tone_signal(output_stream, status)
 
             if status == 'listening':
                 print(".", end="", flush=True)
