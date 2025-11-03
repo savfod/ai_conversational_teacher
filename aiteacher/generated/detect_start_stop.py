@@ -7,7 +7,7 @@ from typing import Dict, Optional
 import numpy as np
 import sounddevice as sd
 import vosk
-import pathlib
+
 
 class VoiceCommandDetector:
     """Detects voice commands for starting and stopping conversation sessions.

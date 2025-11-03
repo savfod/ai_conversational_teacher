@@ -1,12 +1,13 @@
 """Main application for AI conversational teacher."""
 
 import os
-from typing import Optional
-from config import AppConfig
-from voice_interface import VoiceInterface
-from error_checker import ErrorChecker, ErrorCheckResult
 from statistics import StatisticsTracker
+from typing import Optional
+
 from anki_exporter import AnkiExporter
+from config import AppConfig
+from error_checker import ErrorChecker, ErrorCheckResult
+from voice_interface import VoiceInterface
 
 
 class ConversationalTeacher:

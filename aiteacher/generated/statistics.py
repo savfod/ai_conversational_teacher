@@ -1,9 +1,10 @@
 """Statistics tracking for language learning progress."""
 
-from typing import List, Dict, Optional
 from datetime import datetime
-from pydantic import BaseModel, Field
+from typing import Dict, List, Optional
+
 from error_checker import GrammarError, VocabularyItem
+from pydantic import BaseModel, Field
 
 
 class ErrorStatistics(BaseModel):

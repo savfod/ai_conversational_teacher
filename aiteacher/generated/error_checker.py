@@ -1,6 +1,7 @@
 """Error checking with structured LLM output."""
 
 from typing import List, Optional
+
 from pydantic import BaseModel, Field
 
 

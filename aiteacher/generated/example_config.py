@@ -2,7 +2,7 @@
 Example: Creating and using a custom configuration
 """
 
-from config import AppConfig, LanguageConfig, VoiceConfig, StatisticsConfig
+from config import AppConfig, LanguageConfig, StatisticsConfig, VoiceConfig
 
 # Create a custom configuration
 config = AppConfig(

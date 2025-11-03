@@ -3,8 +3,9 @@ Example: Tracking statistics and exporting to Anki
 """
 
 from statistics import StatisticsTracker
-from error_checker import GrammarError, VocabularyItem
+
 from anki_exporter import AnkiExporter
+from error_checker import GrammarError, VocabularyItem
 
 # Create statistics tracker
 stats = StatisticsTracker()

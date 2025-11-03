@@ -12,10 +12,9 @@ Notes:
 - This intentionally keeps the API tiny and lazy-imports `openai` so importing
   this module does not fail when the package is missing.
 """
-from openai import OpenAI
-from pydantic import BaseModel
-from typing import Any, List, TypeVar
 import os
+from typing import Any, List, TypeVar
+
 import openai
 
 SYSTEM_PROMPT: str = """

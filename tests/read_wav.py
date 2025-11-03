@@ -9,13 +9,13 @@ Run:
     python tests/read_wav.py
 
 """
+import sys
 from pathlib import Path
 from typing import Tuple
 
 import numpy as np
 import sounddevice as sd
 import soundfile as sf
-import sys
 
 
 def read_wav(path: Path) -> Tuple[np.ndarray, int]:
@@ -55,8 +55,10 @@ def play_via_outputstream(data: np.ndarray, samplerate: int) -> None:
     with sd.OutputStream(samplerate=samplerate, channels=channels, dtype="float32") as stream:
         stream.write(data)
 
-from aiteacher.audio.input_stream import MicrophoneInputStream
 import librosa
+
+from aiteacher.audio.input_stream import MicrophoneInputStream
+
 
 def main() -> int:
     """Main entry point.
@@ -66,7 +68,8 @@ def main() -> int:
     """
     mic_stream = MicrophoneInputStream(sample_rate=16000)
     mic_stream.start()
-    import time; time.sleep(1)
+    import time
+    time.sleep(1)
     
 
     # path = Path(__file__).parent / "speech.wav"

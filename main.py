@@ -1,16 +1,15 @@
-import time
-from aiteacher.audio.input_stream import MicrophoneInputStream, AudioFileInputStream
-from aiteacher.generated.speech_api import speech_to_text
-from aiteacher.generated.speech_api import text_to_speech
-from aiteacher.audio.audio_parser import AudioParser
-from aiteacher.generated.llm import answer
-
 import sys
+import time
 
-import sounddevice as sd
 import numpy as np
+import sounddevice as sd
 
+from aiteacher.audio.audio_parser import AudioParser
+from aiteacher.audio.input_stream import AudioFileInputStream, MicrophoneInputStream
+from aiteacher.generated.llm import answer
+from aiteacher.generated.speech_api import speech_to_text, text_to_speech
 from aiteacher.scenario.find_errors import check_for_errors
+
 
 def send_tone_signal(output_stream, signal: str):
     """Play a short tone to signal state change"""

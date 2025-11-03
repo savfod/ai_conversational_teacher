@@ -1,11 +1,11 @@
 """Audio parser for processing speech chunks and detecting start/stop commands."""
 
 import json
+from pathlib import Path
+from typing import List, Literal, Optional, Tuple
+
 import numpy as np
 import vosk
-from pathlib import Path
-from typing import Tuple, Optional, List, Literal
-from enum import Enum
 
 Status = Literal["listening", "waiting"]
 

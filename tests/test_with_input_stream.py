@@ -20,8 +20,8 @@ generated_path = Path(__file__).parent.parent / "aiteacher" / "generated"
 sys.path.insert(0, str(audio_path))
 sys.path.insert(0, str(generated_path))
 
-from input_stream import AudioFileInputStream
 from audio_parser import AudioParser
+from input_stream import AudioFileInputStream
 
 
 def test_audio_parser_with_input_stream():

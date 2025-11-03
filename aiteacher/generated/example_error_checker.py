@@ -2,7 +2,7 @@
 Example: Using the error checker with structured output
 """
 
-from error_checker import ErrorChecker, GrammarError, VocabularyItem
+from error_checker import ErrorChecker
 
 # Create error checker for Spanish
 checker = ErrorChecker(

@@ -12,17 +12,15 @@ Type hints and Google-style docstrings are used.
 from __future__ import annotations
 
 import os
+import wave
+from io import BytesIO
 from typing import Optional
-
-from dotenv import load_dotenv
 
 import librosa
 import numpy as np
 import openai
-from io import BytesIO
-import wave
-import struct
 import soundfile as sf
+from dotenv import load_dotenv
 
 # Load environment variables from a .env file if present
 load_dotenv()
@@ -206,8 +204,8 @@ def text_to_speech(text: str, *, model: str = "gpt-4o-mini-tts", voice: Optional
         instructions = "Speak in a cheerful and positive tone."
 
     client = _get_client()
-    from pathlib import Path
     from datetime import datetime
+    from pathlib import Path
     speech_file_path = Path(__file__).parent.parent.parent / "audio" / f"speech_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
     with client.audio.speech.with_streaming_response.create(
         model=model,

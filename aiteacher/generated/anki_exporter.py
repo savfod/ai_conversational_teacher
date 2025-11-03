@@ -1,8 +1,9 @@
 """Anki export functionality for vocabulary learning."""
 
 import csv
-from typing import List
 from datetime import datetime
+from typing import List
+
 from error_checker import VocabularyItem
 
 

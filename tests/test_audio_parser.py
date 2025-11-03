@@ -2,10 +2,10 @@
 
 import sys
 import time
-import numpy as np
-import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
+import numpy as np
 
 # Add the audio module to the path
 sys.path.append(str(Path(__file__).parent.parent / "aiteacher" / "audio"))
@@ -13,6 +13,7 @@ sys.path.append(str(Path(__file__).parent.parent / "aiteacher" / "generated"))
 
 import soundfile as sf
 from audio_parser import AudioParser
+
 
 class TestAudioParser:
     """Test suite for AudioParser class."""

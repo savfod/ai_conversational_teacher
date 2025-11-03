@@ -1,11 +1,15 @@
 """Command-line interface for AI conversational teacher."""
 
 import argparse
-import sys
 import json
+import sys
 from pathlib import Path
-from typing import Any, Optional
-from config import AppConfig, LanguageConfig, VoiceConfig, StatisticsConfig, create_config_interactive
+
+from config import (
+    AppConfig,
+    create_config_interactive,
+)
+
 from main import ConversationalTeacher
 
 
@@ -159,8 +163,8 @@ Examples:
             print(f"Error: Statistics file not found: {args.stats_file}")
             sys.exit(1)
 
-        from .statistics import StatisticsTracker
         from .anki_exporter import AnkiExporter
+        from .statistics import StatisticsTracker
 
         stats = StatisticsTracker.load_from_file(args.stats_file)
 

@@ -6,16 +6,17 @@ microphone input and MP3 file processing without blocking the main thread.
 """
 
 import abc
-import time
 import threading
-from typing import Optional
-import sounddevice as sd
-import numpy as np
+import time
+from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Optional
+
 import librosa
+import numpy as np
+import sounddevice as sd
 import soundfile as sf
 
-from datetime import datetime, timedelta
 
 class AudioBuffer:
     """Thread-safe audio buffer with automatic size management."""

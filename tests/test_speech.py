@@ -5,13 +5,13 @@ These tests check the basic error behavior when the OPENAI_API_KEY is not set.
 from __future__ import annotations
 
 import importlib
-import os
+import time
 
 import pytest
+
 import aiteacher.generated.speech_api as speech
-from aiteacher.generated.speech_api import speech_to_text, text_to_speech
 from aiteacher.audio.input_stream import AudioFileInputStream
-import time
+from aiteacher.generated.speech_api import speech_to_text, text_to_speech
 
 
 def test_functions_raise_when_no_api_key(monkeypatch):
