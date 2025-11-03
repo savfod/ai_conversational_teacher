@@ -28,7 +28,11 @@ def read_wav(path: Path) -> Tuple[np.ndarray, int]:
         A tuple of (data, samplerate). Data is a float32 numpy array with shape
         (frames, channels).
     """
-    data, samplerate = sf.read(str(path), dtype="float32")
+    data, original_samplerate = sf.read(str(path), dtype="float32")
+    # Resample to 16kHz if needed
+    if original_samplerate != 16000:
+        data = librosa.resample(data.T, orig_sr=original_samplerate, target_sr=16000).T
+    samplerate = 16000
     # Ensure data is 2-D: (frames, channels)
     if data.ndim == 1:
         data = data[:, None]
@@ -47,10 +51,12 @@ def play_via_outputstream(data: np.ndarray, samplerate: int) -> None:
     """
     channels = int(data.shape[1])
 
+    
     with sd.OutputStream(samplerate=samplerate, channels=channels, dtype="float32") as stream:
         stream.write(data)
 
 from aiteacher.audio.input_stream import MicrophoneInputStream
+import librosa
 
 def main() -> int:
     """Main entry point.
@@ -60,10 +66,11 @@ def main() -> int:
     """
     mic_stream = MicrophoneInputStream(sample_rate=16000)
     mic_stream.start()
-    import time; time.sleep(2)
+    import time; time.sleep(1)
     
 
-    path = Path(__file__).parent / "speech.wav"
+    # path = Path(__file__).parent / "speech.wav"
+    path = Path(__file__).parent.parent / "audio" / "speech_20251030_172228.wav"
     if not path.exists():
         print(f"Audio file not found: {path}", file=sys.stderr)
         return 2

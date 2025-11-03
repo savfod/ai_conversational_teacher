@@ -8,11 +8,9 @@ microphone input and MP3 file processing without blocking the main thread.
 import abc
 import time
 import threading
-import queue
+from typing import Optional
 import sounddevice as sd
 import numpy as np
-from typing import Optional, List, Union
-import os
 from pathlib import Path
 import librosa
 import soundfile as sf
@@ -247,47 +245,6 @@ class AudioFileInputStream(AbstractAudioInputStream):
             self._is_running = False
 
 
-def save_wav(audio_data: np.ndarray, output_path: str, sample_rate: int = 16000) -> None:
-    """
-    Save audio data as WAV file.
-    
-    Args:
-        audio_data: Audio data as numpy array
-        output_path: Output file path (will be converted to .wav extension)
-        sample_rate: Audio sample rate
-    """
-    # Ensure output directory exists
-    output_dir = Path(output_path).parent
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    try:     
-        sf.write(output_path, audio_data, sample_rate, format='WAV')
-        print(f"Saved audio chunk: {output_path} ({len(audio_data) / sample_rate:.2f}s)")
-        
-    except Exception as e:
-        print(f"Error saving WAV file {output_path}: {e}")
-        print("Falling back to basic WAV format...")
-        
-        # Fallback: basic WAV using wave module
-        import wave
-        
-        try:
-            # Normalize audio data to 16-bit range
-            audio_int16 = (np.clip(audio_data, -1.0, 1.0) * 32767).astype(np.int16)
-            
-            # Save as WAV file
-            with wave.open(output_path, 'wb') as wav_file:
-                wav_file.setnchannels(1)  # Mono
-                wav_file.setsampwidth(2)  # 16-bit
-                wav_file.setframerate(sample_rate)
-                wav_file.writeframes(audio_int16.tobytes())
-            
-            print(f"Saved audio chunk (basic WAV): {output_path} ({len(audio_data) / sample_rate:.2f}s)")
-        
-        except Exception as e2:
-            print(f"Failed to save audio file: {e2}")
-
-
 def _simulate_wait() -> None:
     start = datetime.now()
     print(f"[{start}] Processing audio chunk...")
@@ -295,7 +252,7 @@ def _simulate_wait() -> None:
     while datetime.now() - start < timedelta(seconds=3):
         a = np.zeros([3000,3000]) @ np.zeros([3000,3000])
     time.sleep(1)
-    
+
 
 def _stub_wav_processor(input_stream: AbstractAudioInputStream, output_dir: str = "out") -> None:
     """
@@ -310,31 +267,40 @@ def _stub_wav_processor(input_stream: AbstractAudioInputStream, output_dir: str 
     # Ensure output directory exists
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     
+
     i = 0
-    
+    def _save_chunk(chunk: np.ndarray | None) -> None:
+        nonlocal i
+        if chunk is not None and len(chunk) > 0:
+            i += 1
+            output_path = f"out/chunk_{i:04d}.wav"
+            
+            # save chunk
+            sf.write(output_path, chunk, input_stream.sample_rate, format='WAV')
+            print(f"Saved audio chunk: {output_path} ({len(chunk) / input_stream.sample_rate:.2f}s)")
+
+            duration = len(chunk) / input_stream.sample_rate
+            buffer_duration = input_stream.get_buffer_duration()
+            print(f"Processed chunk {i}: {duration:.2f}s, "
+                f"buffer: {buffer_duration:.2f}s")
+        
+        else:
+            pass # no chunk to save
+
     try:
         while True:
             _simulate_wait()
-            chunk = input_stream.get_unprocessed_chunk()
-            if chunk is not None and len(chunk) > 0:
-                output_path = f"{output_dir}/chunk_{i:04d}.wav"
-                save_wav(chunk, output_path, input_stream.sample_rate)
-                i += 1
-                
-                # Print some stats
-                duration = len(chunk) / input_stream.sample_rate
-                buffer_duration = input_stream.get_buffer_duration()
-                print(f"Processed chunk {i}: {duration:.2f}s, "
-                      f"buffer: {buffer_duration:.2f}s")
-    
+            _save_chunk(input_stream.get_unprocessed_chunk())
+
     except KeyboardInterrupt:
+        _save_chunk(input_stream.get_unprocessed_chunk())
         print("\nStopping WAV processor...")
     
     finally:
         input_stream.stop()
 
 
-def main():
+def _test_online_speech_saver():
     """Main function demonstrating the speech interface usage."""
     print("Speech Interface Stub Demo")
     print("=" * 40)
@@ -359,5 +325,5 @@ def main():
     
     _stub_wav_processor(stream, output_dir="out")
 
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__":    
+    _test_online_speech_saver()
