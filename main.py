@@ -104,6 +104,10 @@ def main():
                 tts_audio = text_to_speech(reply)
                 output_stream.write(tts_audio)
 
+                # avoid parsing text said during blocking playbacks, e.g. TTS output
+                input_stream.get_unprocessed_chunk()
+                audio_parser._reset_vosk() 
+
                 print(f"Generated TTS audio of length: {len(tts_audio)} bytes")
 
 
