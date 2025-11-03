@@ -10,6 +10,8 @@ import sys
 import sounddevice as sd
 import numpy as np
 
+from aiteacher.scenario.find_errors import check_for_errors
+
 def send_tone_signal(output_stream, signal: str):
     """Play a short tone to signal state change"""
 
@@ -89,6 +91,11 @@ def main():
                 print("\nSpeech interval detected. Transcribing...")
                 transcription = speech_to_text(speech, language='en')
                 print(f"Transcription: {transcription}")
+
+                errs_message = check_for_errors(transcription)
+                if errs_message:
+                    print(f"Errors found:\n{errs_message}")
+                    output_stream.write(text_to_speech(errs_message, instructions="Speak in a strict and instructive teacher tone."))
 
                 reply = answer(transcription)
                 print(f"LLM Reply: {reply}")

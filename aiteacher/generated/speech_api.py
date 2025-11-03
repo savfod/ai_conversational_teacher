@@ -183,7 +183,7 @@ def speech_to_text(audio_bytes: np.ndarray, language: Optional[str] = "en", samp
         raise RuntimeError(f"speech_to_text failed: {exc}") from exc
 
 
-def text_to_speech(text: str, *, model: str = "gpt-4o-mini-tts", voice: Optional[str] = None) -> bytes:
+def text_to_speech(text: str, *, model: str = "gpt-4o-mini-tts", voice: Optional[str] = None, instructions: Optional[str] = None) -> bytes:
     """Synthesize speech bytes from text using an OpenAI model.
 
     Args:
@@ -202,6 +202,9 @@ def text_to_speech(text: str, *, model: str = "gpt-4o-mini-tts", voice: Optional
     if voice is None: 
         voice = "coral"  # default voice
     
+    if instructions is None:
+        instructions = "Speak in a cheerful and positive tone."
+
     client = _get_client()
     from pathlib import Path
     from datetime import datetime
@@ -211,7 +214,7 @@ def text_to_speech(text: str, *, model: str = "gpt-4o-mini-tts", voice: Optional
         voice=voice,
         input=text,
         response_format="wav",
-        instructions="Speak in a cheerful and positive tone.",
+        instructions=instructions,
     ) as response:
         response.stream_to_file(speech_file_path)
     
