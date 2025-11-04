@@ -1,7 +1,8 @@
-import loguru
-import time
 import sys
+import time
 from typing import Literal
+
+import loguru
 
 
 def setup_logging(level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO") -> None:

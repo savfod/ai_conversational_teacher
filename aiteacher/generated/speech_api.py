@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 import wave
 from io import BytesIO
-from typing import Optional, Union, Any
+from typing import Any, Optional, Union
 
 import librosa
 import numpy as np
