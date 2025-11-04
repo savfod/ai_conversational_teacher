@@ -8,8 +8,8 @@ from aiteacher.audio.audio_parser import AudioParser
 from aiteacher.audio.input_stream import AudioFileInputStream, MicrophoneInputStream
 from aiteacher.generated.llm import answer
 from aiteacher.generated.speech_api import speech_to_text, text_to_speech
-from aiteacher.util.logs import setup_logging
 from aiteacher.scenario.find_errors import check_for_errors
+from aiteacher.util.logs import setup_logging
 
 
 def send_tone_signal(output_stream: "sd.OutputStream", signal: str) -> None:
@@ -152,5 +152,6 @@ if __name__ == "__main__":
         file_path = sys.argv[2] if len(sys.argv) > 2 else "data/test_audio/error1.wav"
     else:
         file_path = None
+
 
     main(file_path=file_path)

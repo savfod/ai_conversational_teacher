@@ -148,19 +148,19 @@ def answer(query: str, sys_prompt: str = SYSTEM_PROMPT, history: List[Any] = [])
                 client = openai.OpenAI()
                 # client.chat.completions.create is the modern call
                 resp = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
+                    model="gpt-4o-mini-2024-07-18",
                     messages=messages,
                     temperature=0.2,
-                    max_tokens=512,
+                    max_tokens=4_096,
                 )
             except Exception:
                 # If the client exists but shape differs, try attribute path on module
                 if hasattr(openai, "chat") and hasattr(openai.chat, "completions"):
                     resp = openai.chat.completions.create(
-                        model="gpt-3.5-turbo",
+                        model="gpt-4o-mini-2024-07-18",
                         messages=messages,
                         temperature=0.2,
-                        max_tokens=512,
+                        max_tokens=4_096,
                     )
                 else:
                     raise
