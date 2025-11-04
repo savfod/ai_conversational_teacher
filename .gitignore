@@ -4,10 +4,14 @@ config.json
 # *.csv
 # !.env.example
 
-# tmp
-vosk-model-small-en-us-0.15
+# models
+models/*
+!models/models.md
+
 audio/speech_2025*
 
+# Mac :/ 
+.DS_Store
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

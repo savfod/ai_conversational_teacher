@@ -31,8 +31,8 @@ class AudioParser:
         # Resolve model path
         model_path_obj = Path(model_path)
         if not model_path_obj.is_absolute():
-            # Look for model in the generated directory
-            generated_dir = Path(__file__).parent.parent / "generated"
+            # Look for model in the model directory
+            generated_dir = Path(__file__).parent.parent.parent / "models"
             model_path_obj = generated_dir / model_path_obj
         
         if not model_path_obj.exists():
