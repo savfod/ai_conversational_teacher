@@ -10,6 +10,7 @@ dependencies = [
     "loguru>=0.7.3",
     "numpy>=2.3.4",
     "openai>=2.7.1",
+    "pytest>=9.0.0",
     "sounddevice>=0.5.3",
     "vosk==0.3.44",
 ]

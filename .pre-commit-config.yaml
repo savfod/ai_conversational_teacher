@@ -25,11 +25,13 @@ repos:
     hooks:
       - id: uv-lock
 
-  # - repo: local
-  #   hooks:
-  #   - id: pytest
-  #     name: pytest
-  #     entry: uv run -m pytest --cov=qualiluma tests -m "not slow"
-  #     language: system
-  #     pass_filenames: false
-  #     always_run: true
+  - repo: local
+    hooks:
+    - id: pytest
+      name: pytest
+      # todo: fix coverage later
+      # entry: uv run -m pytest --cov=aiteacher tests -m "not slow"
+      entry: uv run -m pytest tests -m "not slow"
+      language: system
+      pass_filenames: false
+      always_run: true
