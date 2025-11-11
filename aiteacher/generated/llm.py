@@ -12,8 +12,9 @@ Notes:
 - This intentionally keeps the API tiny and lazy-imports `openai` so importing
   this module does not fail when the package is missing.
 """
+
 import os
-from typing import Any, List, TypeVar
+from typing import Any, Iterable, TypeVar
 
 import openai
 
@@ -24,6 +25,7 @@ You are a language teacher. You answer according to the following rules:
 - Ignore the word "start" in the beginning of the conversation and the word "stop" at the end (they are just to start and stop the recording).
 - Answer in the same language as the users input
 """
+
 
 def _extract_content(resp: Any) -> str:
     """Robustly extract assistant text from an OpenAI response object/dict.
@@ -60,6 +62,8 @@ def _extract_content(resp: Any) -> str:
 
 
 T = TypeVar("T")
+
+
 def answer_structured_simple(query: str, sys_prompt: str, answer_format: type[T]) -> T:
     """Return an LLM answer for `query`, parsed into a structured format.
 
@@ -91,7 +95,9 @@ def answer_structured_simple(query: str, sys_prompt: str, answer_format: type[T]
     return answer
 
 
-def answer(query: str, sys_prompt: str = SYSTEM_PROMPT, history: List[Any] = []) -> str:
+def answer(
+    query: str, sys_prompt: str = SYSTEM_PROMPT, history: Iterable[Any] = tuple()
+) -> str:
     """Return an LLM answer for `query`.
 
     Args:
@@ -134,7 +140,9 @@ def answer(query: str, sys_prompt: str = SYSTEM_PROMPT, history: List[Any] = [])
         elif isinstance(item, str):
             messages.append({"role": "user", "content": item})
         else:
-            raise ValueError("history items must be dict(role/content), tuple(role,content) or str")
+            raise ValueError(
+                "history items must be dict(role/content), tuple(role,content) or str"
+            )
 
     messages.append({"role": "user", "content": query})
 
@@ -178,7 +186,11 @@ def answer(query: str, sys_prompt: str = SYSTEM_PROMPT, history: List[Any] = [])
                 )
             else:
                 # Another possible shape: openai.chat.completions.create at module level
-                if hasattr(openai, "chat") and hasattr(openai.chat, "completions") and hasattr(openai.chat.completions, "create"):
+                if (
+                    hasattr(openai, "chat")
+                    and hasattr(openai.chat, "completions")
+                    and hasattr(openai.chat.completions, "create")
+                ):
                     resp = openai.chat.completions.create(
                         model="gpt-3.5-turbo",
                         messages=messages,
@@ -186,7 +198,9 @@ def answer(query: str, sys_prompt: str = SYSTEM_PROMPT, history: List[Any] = [])
                         max_tokens=512,
                     )
                 else:
-                    raise RuntimeError("Unsupported openai client installed; cannot find ChatCompletion or OpenAI client")
+                    raise RuntimeError(
+                        "Unsupported openai client installed; cannot find ChatCompletion or OpenAI client"
+                    )
     except Exception as exc:
         raise RuntimeError(f"OpenAI API error: {exc}") from exc
 

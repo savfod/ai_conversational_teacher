@@ -72,15 +72,15 @@ def main(language: str, file_path: str | None = None) -> None:
     Returns:
         None
     """
-    print("Starting MicrophoneInputStream...")
-
     if file_path is not None:
+        print("Starting AudioFileInputStream...")
         input_stream = AudioFileInputStream(
             file_path=file_path,
         )
         input_stream.start()
         print("Audio file stream started.")
     else:
+        print("Starting MicrophoneInputStream...")
         input_stream = MicrophoneInputStream(sample_rate=16000)
         input_stream.start()
         print("Microphone stream started. Press Ctrl+C to stop.")
