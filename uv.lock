@@ -19,6 +19,7 @@ dependencies = [
     { name = "pytest-cov" },
     { name = "python-dotenv" },
     { name = "sounddevice" },
+    { name = "soundfile" },
     { name = "vosk" },
 ]
 
@@ -32,6 +33,7 @@ requires-dist = [
     { name = "pytest-cov", specifier = ">=7.0.0" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
     { name = "sounddevice", specifier = ">=0.5.3" },
+    { name = "soundfile", specifier = ">=0.13.1" },
     { name = "vosk", specifier = "==0.3.44" },
 ]
 

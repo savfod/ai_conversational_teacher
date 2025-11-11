@@ -274,7 +274,7 @@ def test_with_actual_audio_file():
                 chunk = input_stream.get_unprocessed_chunk()
                 if chunk is not None and len(chunk) > 0:
                     chunk_count += 1
-                    status, audio_interval = parser.add_chunk(chunk)
+                    status, audio_interval, _ = parser.add_chunk(chunk)
 
                     if audio_interval is not None:
                         speech_intervals.append(audio_interval)

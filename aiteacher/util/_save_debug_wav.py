@@ -167,7 +167,7 @@ def _handle_tts_mode(
     The project's `speech_api.text_to_speech` may return either raw bytes, or a numpy
     array of float32 samples. Handle both.
     """
-    print(f"Synthetizing TTS for text: {text!r}")
+    print(f"Synthesizing TTS for text: {text!r}")
     result = speech_api.text_to_speech(text, model="gpt-4o-mini-tts", voice=voice)
 
     # Normalize out_path to Path for consistent file operations
