@@ -136,7 +136,7 @@ def main(language: str, file_path: str | None = None) -> None:
 
                 # avoid parsing text said during blocking playbacks, e.g. TTS output
                 input_stream.get_unprocessed_chunk()
-                audio_parser._reset_vosk()
+                audio_parser.reset()
 
                 print(f"Generated TTS audio of length: {len(tts_audio)} bytes")
 

@@ -1,14 +1,13 @@
 """Test audio parser functionality with start/stop commands."""
 
-import sys
 import time
 from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
-import soundfile as sf
 
 from conversa.audio.audio_parser import AudioParser
+from conversa.audio.input_stream import AudioFileInputStream
 
 
 class TestAudioParser:
@@ -153,32 +152,32 @@ class TestAudioParser:
                 abs(parser.buffered_duration - 1.0) < 0.01
             )  # Should be close to 1 seconds
 
-    # @patch('audio_parser.vosk.Model')
-    # @patch('audio_parser.vosk.KaldiRecognizer')
-    # def test_reset_functionality(self, mock_recognizer, mock_model):
-    #     """Test parser reset functionality."""
-    #     with patch('audio_parser.Path.exists', return_value=True):
-    #         parser = AudioParser(self.mock_model_path)
+    @patch("conversa.audio.audio_parser.vosk.Model")
+    @patch("conversa.audio.audio_parser.vosk.KaldiRecognizer")
+    def test_reset_functionality(self, mock_recognizer, mock_model):
+        """Test parser reset functionality."""
+        with patch("conversa.audio.audio_parser.Path.exists", return_value=True):
+            parser = AudioParser(self.mock_model_path)
 
-    #         mock_recognizer_instance = mock_recognizer.return_value
+            mock_recognizer_instance = mock_recognizer.return_value
 
-    #         # Start listening and add some audio
-    #         mock_recognizer_instance.AcceptWaveform.return_value = True
-    #         mock_recognizer_instance.Result.return_value = '{"text": "start"}'
+            # Start listening and add some audio
+            mock_recognizer_instance.AcceptWaveform.return_value = True
+            mock_recognizer_instance.Result.return_value = '{"text": "start"}'
 
-    #         audio_chunk = np.random.normal(0, 0.1, 1600).astype(np.float32)
-    #         parser.add_chunk(audio_chunk)
-    #         assert parser.status == "listening"
-    #         assert parser.buffered_duration == 0
+            audio_chunk = np.random.normal(0, 0.1, 1600).astype(np.float32)
+            parser.add_chunk(audio_chunk)
+            assert parser.status == "listening"
+            assert parser.buffered_duration == 0
 
-    #         parser.add_chunk(audio_chunk)
-    #         assert parser.buffered_duration > 0.0
+            parser.add_chunk(audio_chunk)
+            assert parser.buffered_duration > 0.0
 
-    #         # Reset parser
-    #         parser.reset()
+            # Reset parser
+            parser.reset()
 
-    #         assert parser.status == "waiting"
-    #         assert parser.buffered_duration == 0.0
+            assert parser.status == "waiting"
+            assert parser.buffered_duration == 0.0
 
 
 def test_with_actual_audio_file():
@@ -192,31 +191,10 @@ def test_with_actual_audio_file():
         print(f"Warning: Test audio file not found at {test_audio_path}")
         return
 
-    print(f"Testing with audio file: {test_audio_path}")
-
-    # Import input stream classes
-    sys.path.append(str(Path(__file__).parent.parent / "aiteacher" / "audio"))
-    try:
-        from input_stream import AudioFileInputStream
-    except ImportError as e:
-        print(f"Warning: Could not import input_stream: {e}")
-        # Fallback to direct audio file loading
-        try:
-            audio_data, sample_rate = sf.read(str(test_audio_path))
-            print(
-                f"Loaded test audio directly: {test_audio_path.name}, {len(audio_data) / sample_rate:.1f} seconds"
-            )
-        except Exception as e:
-            print(f"Error loading audio file: {e}")
-            return
-
-        # Convert to mono if necessary
-        if len(audio_data.shape) > 1:
-            audio_data = audio_data[:, 0]
-
-        # Use the original test approach
-        _test_with_direct_audio_data(audio_data, sample_rate)
-        return
+    # print(f"Testing with audio file: {test_audio_path}")
+    # import soundfile as sf
+    # audio_data, sample_rate = sf.read(str(test_audio_path))
+    # ...
 
     # Test with input stream
     print("Using AudioFileInputStream for testing...")

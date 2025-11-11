@@ -7,7 +7,7 @@ from typing import List, Literal, Optional, Tuple
 import numpy as np
 import vosk
 
-Status = Literal["listening", "waiting"]
+State = Literal["listening", "waiting"]
 
 
 class AudioParser:
@@ -44,7 +44,7 @@ class AudioParser:
         self._audio_buffer: List[np.ndarray] = []
         self._vosk_parsed_buffer: List[str] = []  # todo: remove
 
-        self._status: Status = "waiting"
+        self._state: State = "waiting"
 
     @staticmethod
     def _has_start_seq(text: str) -> bool:
@@ -80,7 +80,7 @@ class AudioParser:
 
     def add_chunk(
         self, audio_chunk: np.ndarray
-    ) -> Tuple[Status, Optional[np.ndarray], bool]:
+    ) -> Tuple[State, Optional[np.ndarray], bool]:
         """Add an audio chunk and process it for start/stop detection.
 
         Args:
@@ -92,39 +92,34 @@ class AudioParser:
             - optional_audio: Complete speech interval if stop was just detected, None otherwise
             - status_changed: True if the parser status changed during this call
         """
-        prev_status = self._status
+        optional_audio: Optional[np.ndarray] = None
+        status_changed = False
 
         self._audio_buffer.append(audio_chunk.copy())
         detected_text = self._add_vosk_chunk(audio_chunk.copy())
 
         # Detect start command
-        if self._status == "waiting" and self._has_start_seq(detected_text):
+        if self._state == "waiting" and self._has_start_seq(detected_text):
             print("START command detected - now listening for speech")
-            self._status = "listening"
-            self._audio_buffer = []  # Clear any previous buffer
-            self._reset_vosk()
+            status_changed = True
+            self.reset(to_state="listening")
 
         # Detect stop command
-        elif self._status == "listening" and self._has_stop_seq(detected_text):
+        elif self._state == "listening" and self._has_stop_seq(detected_text):
             print("STOP command detected - processing speech interval")
-            self._status = "waiting"
-
             if self._audio_buffer:
-                complete_audio = np.concatenate(self._audio_buffer)
+                optional_audio = np.concatenate(self._audio_buffer)
             else:
-                complete_audio = np.array([], dtype=np.float32)
+                optional_audio = np.array([], dtype=np.float32)
                 print("Warning: no audio buffered between start and stop")
 
             print(
-                f"Returning speech interval: {len(complete_audio) / self.sample_rate:.2f} seconds"
+                f"Returning speech interval: {len(optional_audio) / self.sample_rate:.2f} seconds"
             )
-            self._reset_vosk()
+            status_changed = True
+            self.reset(to_state="waiting")
 
-            status_changed = self._status != prev_status
-            return self._status, complete_audio, status_changed
-
-        status_changed = self._status != prev_status
-        return self._status, None, status_changed
+        return self._state, optional_audio, status_changed
 
     @staticmethod
     def _preprocess_vosk_chunk(audio_chunk: np.ndarray) -> bytes:
@@ -172,15 +167,10 @@ class AudioParser:
         # text = " ".join(self._vosk_parsed_buffer) + cur_text
         # print(f"[VOSK] Text part:", text)
 
-    def _reset_vosk(self) -> None:
-        """Reset Vosk recognizer to clear any partial recognition state."""
-        self._vosk_parsed_buffer = []
-        self.recognizer = vosk.KaldiRecognizer(self.model, self.sample_rate)
-
     @property
-    def status(self) -> Status:
+    def status(self) -> State:
         """Get current parser status."""
-        return self._status
+        return self._state
 
     @property
     def buffered_duration(self) -> float:
@@ -190,14 +180,12 @@ class AudioParser:
         total_samples = sum(len(chunk) for chunk in self._audio_buffer)
         return total_samples / self.sample_rate
 
-    # def reset(self) -> None:
-    #     """Reset the parser to the initial state.
+    def reset(self, to_state: State = "waiting") -> None:
+        """Delete all buffered audio and recognized text."""
+        self._audio_buffer = []
+        self._state = to_state
 
-    #     This clears any buffered audio and resets the Vosk recognizer and
-    #     parser status to the initial 'waiting' state.
-    #     """
-    #     print("Resetting audio parser state")
-    #     self._audio_buffer = []
-    #     self._vosk_parsed_buffer = []
-    #     self._status = "waiting"
-    #     self._reset_vosk()
+        # Reset Vosk recognizer to clear any partial recognition state.
+        # todo: try to avoid with direct vosk.recognize() interface if possible
+        self._vosk_parsed_buffer = []
+        self.recognizer = vosk.KaldiRecognizer(self.model, self.sample_rate)
