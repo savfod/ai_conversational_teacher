@@ -12,8 +12,8 @@ It uses the existing `aiteacher/audio/start_stop.mp3` file and the
 import time
 from pathlib import Path
 
-from aiteacher.audio.audio_parser import AudioParser
-from aiteacher.audio.input_stream import AudioFileInputStream
+from conversa.audio.audio_parser import AudioParser
+from conversa.audio.input_stream import AudioFileInputStream
 
 
 def test_audio_parser_with_input_stream():

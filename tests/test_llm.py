@@ -1,4 +1,4 @@
-"""Tests for aiteacher.generated.llm.
+"""Tests for conversa.generated.llm.
 
 These tests monkeypatch a fake `openai` module to avoid network calls.
 """
@@ -25,7 +25,7 @@ def test_answer_with_fake_openai(monkeypatch):
 
     monkeypatch.setitem(sys.modules, "openai", dummy)
 
-    from aiteacher.generated import llm
+    from conversa.generated import llm
 
     res = llm.answer("hi", history=[("user", "previous")])
     assert isinstance(res, str)

@@ -8,7 +8,7 @@ from unittest.mock import patch
 import numpy as np
 import soundfile as sf
 
-from aiteacher.audio.audio_parser import AudioParser
+from conversa.audio.audio_parser import AudioParser
 
 
 class TestAudioParser:
@@ -20,23 +20,23 @@ class TestAudioParser:
         self.mock_model_path = "vosk-model-small-en-us-0.15"
         self.sample_rate = 16000
 
-    @patch("aiteacher.audio.audio_parser.vosk.Model")
-    @patch("aiteacher.audio.audio_parser.vosk.KaldiRecognizer")
+    @patch("conversa.audio.audio_parser.vosk.Model")
+    @patch("conversa.audio.audio_parser.vosk.KaldiRecognizer")
     def test_parser_initialization(self, mock_recognizer, mock_model):
         """Test that AudioParser initializes correctly."""
         # Mock the Path.exists() to return True
-        with patch("aiteacher.audio.audio_parser.Path.exists", return_value=True):
+        with patch("conversa.audio.audio_parser.Path.exists", return_value=True):
             parser = AudioParser(self.mock_model_path, self.sample_rate)
 
             assert parser.sample_rate == self.sample_rate
             assert parser.status == "waiting"
             assert parser.buffered_duration == 0.0
 
-    @patch("aiteacher.audio.audio_parser.vosk.Model")
-    @patch("aiteacher.audio.audio_parser.vosk.KaldiRecognizer")
+    @patch("conversa.audio.audio_parser.vosk.Model")
+    @patch("conversa.audio.audio_parser.vosk.KaldiRecognizer")
     def test_start_command_detection(self, mock_recognizer, mock_model):
         """Test detection of start command."""
-        with patch("aiteacher.audio.audio_parser.Path.exists", return_value=True):
+        with patch("conversa.audio.audio_parser.Path.exists", return_value=True):
             parser = AudioParser(self.mock_model_path)
 
             # Mock Vosk to return start command
@@ -56,11 +56,11 @@ class TestAudioParser:
             assert parser.status == "listening"
             assert status_changed is True
 
-    @patch("aiteacher.audio.audio_parser.vosk.Model")
-    @patch("aiteacher.audio.audio_parser.vosk.KaldiRecognizer")
+    @patch("conversa.audio.audio_parser.vosk.Model")
+    @patch("conversa.audio.audio_parser.vosk.KaldiRecognizer")
     def test_stop_command_detection(self, mock_recognizer, mock_model):
         """Test detection of stop command and audio interval extraction."""
-        with patch("aiteacher.audio.audio_parser.Path.exists", return_value=True):
+        with patch("conversa.audio.audio_parser.Path.exists", return_value=True):
             parser = AudioParser(self.mock_model_path)
 
             mock_recognizer_instance = mock_recognizer.return_value
@@ -105,13 +105,13 @@ class TestAudioParser:
             expected_length = len(audio_chunk2) + len(audio_chunk3) + len(audio_chunk4)
             assert len(returned_audio) == expected_length
 
-    @patch("aiteacher.audio.audio_parser.vosk.Model")
-    @patch("aiteacher.audio.audio_parser.vosk.KaldiRecognizer")
+    @patch("conversa.audio.audio_parser.vosk.Model")
+    @patch("conversa.audio.audio_parser.vosk.KaldiRecognizer")
     def test_waiting_state_ignores_non_start_commands(
         self, mock_recognizer, mock_model
     ):
         """Test that parser ignores non-start commands when in waiting state."""
-        with patch("aiteacher.audio.audio_parser.Path.exists", return_value=True):
+        with patch("conversa.audio.audio_parser.Path.exists", return_value=True):
             parser = AudioParser(self.mock_model_path)
 
             mock_recognizer_instance = mock_recognizer.return_value
@@ -127,11 +127,11 @@ class TestAudioParser:
             assert parser.status == "waiting"
             assert status_changed is False
 
-    @patch("aiteacher.audio.audio_parser.vosk.Model")
-    @patch("aiteacher.audio.audio_parser.vosk.KaldiRecognizer")
+    @patch("conversa.audio.audio_parser.vosk.Model")
+    @patch("conversa.audio.audio_parser.vosk.KaldiRecognizer")
     def test_buffered_duration_calculation(self, mock_recognizer, mock_model):
         """Test calculation of buffered audio duration."""
-        with patch("aiteacher.audio.audio_parser.Path.exists", return_value=True):
+        with patch("conversa.audio.audio_parser.Path.exists", return_value=True):
             parser = AudioParser(self.mock_model_path, sample_rate=16000)
 
             mock_recognizer_instance = mock_recognizer.return_value
@@ -230,9 +230,9 @@ def test_with_actual_audio_file():
 
     # Test audio parsing with mocked Vosk
     with (
-        patch("aiteacher.audio.audio_parser.vosk.Model"),
-        patch("aiteacher.audio.audio_parser.vosk.KaldiRecognizer"),
-        patch("aiteacher.audio.audio_parser.Path.exists", return_value=True),
+        patch("conversa.audio.audio_parser.vosk.Model"),
+        patch("conversa.audio.audio_parser.vosk.KaldiRecognizer"),
+        patch("conversa.audio.audio_parser.Path.exists", return_value=True),
     ):
         parser = AudioParser("vosk-model-small-en-us-0.15", 16000)
 
@@ -301,9 +301,9 @@ def _test_with_direct_audio_data(audio_data, sample_rate):
 
     # Test audio parsing with mocked Vosk
     with (
-        patch("aiteacher.audio.audio_parser.vosk.Model"),
-        patch("aiteacher.audio.audio_parser.vosk.KaldiRecognizer"),
-        patch("aiteacher.audio.audio_parser.Path.exists", return_value=True),
+        patch("conversa.audio.audio_parser.vosk.Model"),
+        patch("conversa.audio.audio_parser.vosk.KaldiRecognizer"),
+        patch("conversa.audio.audio_parser.Path.exists", return_value=True),
     ):
         parser = AudioParser("vosk-model-small-en-us-0.15", int(sample_rate))
 

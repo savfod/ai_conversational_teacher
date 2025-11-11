@@ -8,9 +8,9 @@ This script is intended as a small debugging utility. It supports three modes:
 
 Usage examples:
 
-    python -m aiteacher.generated._save_debug_wav file --input audio.mp3 --out out.wav
-    python -m aiteacher.generated._save_debug_wav mic --duration 5 --out mic.wav
-    python -m aiteacher.generated._save_debug_wav tts --text "Hello world" --out tts.wav
+    python -m conversa.generated._save_debug_wav file --input audio.mp3 --out out.wav
+    python -m conversa.generated._save_debug_wav mic --duration 5 --out mic.wav
+    python -m conversa.generated._save_debug_wav tts --text "Hello world" --out tts.wav
 
 This file intentionally has no tests (debug helper).
 """
@@ -25,11 +25,11 @@ from typing import Optional
 import numpy as np
 import soundfile as sf
 
-from aiteacher.audio.input_stream import (
+from conversa.audio.input_stream import (
     AudioFileInputStream,
     MicrophoneInputStream,
 )
-from aiteacher.generated import speech_api
+from conversa.generated import speech_api
 
 
 def _save_array_to_wav(data: np.ndarray, sample_rate: int, out_path: Path) -> None:

@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from aiteacher.generated.llm import answer_structured_simple
+from conversa.generated.llm import answer_structured_simple
 
 
 class ErrorDetail(BaseModel):

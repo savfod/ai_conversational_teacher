@@ -4,12 +4,12 @@ import time
 import numpy as np
 import sounddevice as sd
 
-from aiteacher.audio.audio_parser import AudioParser
-from aiteacher.audio.input_stream import AudioFileInputStream, MicrophoneInputStream
-from aiteacher.generated.llm import answer
-from aiteacher.generated.speech_api import speech_to_text, text_to_speech
-from aiteacher.scenario.find_errors import check_for_errors
-from aiteacher.util.logs import setup_logging
+from conversa.audio.audio_parser import AudioParser
+from conversa.audio.input_stream import AudioFileInputStream, MicrophoneInputStream
+from conversa.generated.llm import answer
+from conversa.generated.speech_api import speech_to_text, text_to_speech
+from conversa.scenario.find_errors import check_for_errors
+from conversa.util.logs import setup_logging
 
 
 def send_tone_signal(output_stream: "sd.OutputStream", signal: str) -> None:
