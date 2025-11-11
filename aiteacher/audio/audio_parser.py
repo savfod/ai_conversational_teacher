@@ -12,7 +12,7 @@ Status = Literal["listening", "waiting"]
 
 class AudioParser:
     """Processes audio chunks to detect start/stop commands and extract speech intervals.
-    
+
     This class maintains an internal buffer of audio chunks and uses Vosk speech recognition
     to detect "start" and "stop" commands. When a complete speech interval is detected
     (from start to stop), it returns the accumulated audio data.
@@ -20,30 +20,30 @@ class AudioParser:
 
     def __init__(self, model_path: str, sample_rate: int = 16000) -> None:
         """Initialize the audio parser.
-        
+
         Args:
             model_path: Path to the Vosk model directory.
             sample_rate: Audio sample rate in Hz.
         """
         # Initialize Vosk
         vosk.SetLogLevel(0)  # Enable Vosk logging for testing
-        
+
         # Resolve model path
         model_path_obj = Path(model_path)
         if not model_path_obj.is_absolute():
             # Look for model in the model directory
             generated_dir = Path(__file__).parent.parent.parent / "models"
             model_path_obj = generated_dir / model_path_obj
-        
+
         if not model_path_obj.exists():
             raise FileNotFoundError(f"Vosk model not found at: {model_path_obj}")
-        
+
         self.model = vosk.Model(str(model_path_obj))
         self.recognizer = vosk.KaldiRecognizer(self.model, sample_rate)
         self.sample_rate = sample_rate
         self._audio_buffer: List[np.ndarray] = []
         self._vosk_parsed_buffer: List[str] = []  # todo: remove
-    
+
         self._status: Status = "waiting"
 
     @staticmethod
@@ -56,7 +56,14 @@ class AudioParser:
         Returns:
             True if a start-like token is present, False otherwise.
         """
-        start_words = ["start", "go", "begin", "that", "startup"]  # not too accurate on 'start'
+        # "start" and words that "start" is sometimes misrecognized as
+        start_words = [
+            "start",
+            "go",
+            "begin",
+            "that",
+            "startup",
+        ]  # not too accurate on 'start'
         return any(word in text.lower() for word in start_words)
 
     @staticmethod
@@ -71,7 +78,9 @@ class AudioParser:
         """
         return text.lower().count("stop") > 1
 
-    def add_chunk(self, audio_chunk: np.ndarray) -> Tuple[Status, Optional[np.ndarray], bool]:
+    def add_chunk(
+        self, audio_chunk: np.ndarray
+    ) -> Tuple[Status, Optional[np.ndarray], bool]:
         """Add an audio chunk and process it for start/stop detection.
 
         Args:
@@ -106,13 +115,15 @@ class AudioParser:
                 complete_audio = np.array([], dtype=np.float32)
                 print("Warning: no audio buffered between start and stop")
 
-            print(f"Returning speech interval: {len(complete_audio) / self.sample_rate:.2f} seconds")
+            print(
+                f"Returning speech interval: {len(complete_audio) / self.sample_rate:.2f} seconds"
+            )
             self._reset_vosk()
 
-            status_changed = (self._status != prev_status)
+            status_changed = self._status != prev_status
             return self._status, complete_audio, status_changed
 
-        status_changed = (self._status != prev_status)
+        status_changed = self._status != prev_status
         return self._status, None, status_changed
 
     @staticmethod
@@ -144,14 +155,14 @@ class AudioParser:
 
         if self.recognizer.AcceptWaveform(audio_data):
             result = json.loads(self.recognizer.Result())
-            text = result.get('text', '').strip()
+            text = result.get("text", "").strip()
             print(f"[VOSK] Full result: {result}")  # Print full Vosk result for testing
             self._vosk_parsed_buffer.append(text)
             return text
         else:
             # Also check for partial results during testing
             partial_result = json.loads(self.recognizer.PartialResult())
-            partial_text = partial_result.get('partial', '').strip()
+            partial_text = partial_result.get("partial", "").strip()
             if partial_text:
                 print(f"[VOSK] Partial: {partial_text}")
             cur_text = " " + partial_text
@@ -160,19 +171,17 @@ class AudioParser:
         # It may be reasonable or not to combine with previously calculated buffer.
         # text = " ".join(self._vosk_parsed_buffer) + cur_text
         # print(f"[VOSK] Text part:", text)
-    
-    
-    
+
     def _reset_vosk(self) -> None:
         """Reset Vosk recognizer to clear any partial recognition state."""
         self._vosk_parsed_buffer = []
         self.recognizer = vosk.KaldiRecognizer(self.model, self.sample_rate)
-    
+
     @property
     def status(self) -> Status:
         """Get current parser status."""
         return self._status
-    
+
     @property
     def buffered_duration(self) -> float:
         """Get duration of currently buffered audio in seconds."""
@@ -180,7 +189,7 @@ class AudioParser:
             return 0.0
         total_samples = sum(len(chunk) for chunk in self._audio_buffer)
         return total_samples / self.sample_rate
-    
+
     # def reset(self) -> None:
     #     """Reset the parser to the initial state.
 

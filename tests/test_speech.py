@@ -2,6 +2,7 @@
 
 These tests check the basic error behavior when the OPENAI_API_KEY is not set.
 """
+
 from __future__ import annotations
 
 import time

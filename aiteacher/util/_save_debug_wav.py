@@ -14,6 +14,7 @@ Usage examples:
 
 This file intentionally has no tests (debug helper).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -51,13 +52,15 @@ def _save_array_to_wav(data: np.ndarray, sample_rate: int, out_path: Path) -> No
         # Convert integer types to float32 in range [-1,1]
         info = np.iinfo(data.dtype) if np.issubdtype(data.dtype, np.integer) else None
         if info is not None:
-            write_data = (data.astype("float32") / float(info.max))
+            write_data = data.astype("float32") / float(info.max)
         else:
             write_data = data.astype("float32")
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     sf.write(str(out_path), write_data, sample_rate, format="WAV")
-    print(f"Saved WAV: {out_path} ({len(write_data)/sample_rate:.2f} s @ {sample_rate} Hz)")
+    print(
+        f"Saved WAV: {out_path} ({len(write_data) / sample_rate:.2f} s @ {sample_rate} Hz)"
+    )
 
 
 def _handle_file_mode(
@@ -110,7 +113,12 @@ def _handle_file_mode(
         stream.stop()
 
 
-def _handle_mic_mode(duration: float, out_path: str, device: Optional[int] = None, sample_rate: int = 16000) -> None:
+def _handle_mic_mode(
+    duration: float,
+    out_path: str,
+    device: Optional[int] = None,
+    sample_rate: int = 16000,
+) -> None:
     """Record from microphone for `duration` seconds and save the captured audio.
 
     Args:
@@ -151,7 +159,9 @@ def _handle_mic_mode(duration: float, out_path: str, device: Optional[int] = Non
         stream.stop()
 
 
-def _handle_tts_mode(text: str, out_path: str, sample_rate: int = 16000, voice: Optional[str] = None) -> None:
+def _handle_tts_mode(
+    text: str, out_path: str, sample_rate: int = 16000, voice: Optional[str] = None
+) -> None:
     """Generate speech from `text` using `speech_api.text_to_speech` and save to out_path.
 
     The project's `speech_api.text_to_speech` may return either raw bytes, or a numpy
@@ -167,7 +177,9 @@ def _handle_tts_mode(text: str, out_path: str, sample_rate: int = 16000, voice: 
         # Write bytes to a temporary file path and then read with soundfile to normalize
         out_p.parent.mkdir(parents=True, exist_ok=True)
         out_p.write_bytes(result)
-        print(f"Wrote raw bytes to {out_p}; attempting to read and re-save at {sample_rate} Hz")
+        print(
+            f"Wrote raw bytes to {out_p}; attempting to read and re-save at {sample_rate} Hz"
+        )
         try:
             data, sr = sf.read(str(out_p), dtype="float32")
             if data.ndim == 2:
@@ -186,7 +198,9 @@ def _handle_tts_mode(text: str, out_path: str, sample_rate: int = 16000, voice: 
 
             arr = _np.asarray(result)
         except Exception:
-            raise RuntimeError("Unsupported TTS result type from speech_api.text_to_speech")
+            raise RuntimeError(
+                "Unsupported TTS result type from speech_api.text_to_speech"
+            )
 
         if arr.size == 0:
             print("TTS returned empty audio data")
@@ -196,26 +210,52 @@ def _handle_tts_mode(text: str, out_path: str, sample_rate: int = 16000, voice: 
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Debug helper: save WAV from file, mic, or TTS")
+    parser = argparse.ArgumentParser(
+        description="Debug helper: save WAV from file, mic, or TTS"
+    )
     sub = parser.add_subparsers(dest="mode", required=True)
 
-    p_file = sub.add_parser("file", help="Create WAV from an audio file using AudioFileInputStream")
-    p_file.add_argument("--input", "-i", required=True, help="Input audio file path (mp3/wav/etc.)")
+    p_file = sub.add_parser(
+        "file", help="Create WAV from an audio file using AudioFileInputStream"
+    )
+    p_file.add_argument(
+        "--input", "-i", required=True, help="Input audio file path (mp3/wav/etc.)"
+    )
     p_file.add_argument("--out", "-o", required=True, help="Output WAV file path")
-    p_file.add_argument("--timeout", "-t", type=float, default=30.0, help="Timeout waiting for chunk (seconds)")
-    p_file.add_argument("--duration", "-d", type=float, default=None, help="Seconds to save from start (default: one chunk)")
+    p_file.add_argument(
+        "--timeout",
+        "-t",
+        type=float,
+        default=30.0,
+        help="Timeout waiting for chunk (seconds)",
+    )
+    p_file.add_argument(
+        "--duration",
+        "-d",
+        type=float,
+        default=None,
+        help="Seconds to save from start (default: one chunk)",
+    )
 
     p_mic = sub.add_parser("mic", help="Record microphone and save to WAV")
-    p_mic.add_argument("--duration", "-d", type=float, default=5.0, help="Seconds to record")
+    p_mic.add_argument(
+        "--duration", "-d", type=float, default=5.0, help="Seconds to record"
+    )
     p_mic.add_argument("--out", "-o", required=True, help="Output WAV file path")
-    p_mic.add_argument("--device", type=int, default=None, help="Optional sounddevice device id")
+    p_mic.add_argument(
+        "--device", type=int, default=None, help="Optional sounddevice device id"
+    )
     p_mic.add_argument("--sr", type=int, default=16000, help="Sample rate to use")
 
     p_tts = sub.add_parser("tts", help="Synthesize text to speech and save to WAV")
     p_tts.add_argument("--text", "-t", required=True, help="Text to synthesize")
     p_tts.add_argument("--out", "-o", required=True, help="Output WAV file path")
-    p_tts.add_argument("--sr", type=int, default=16000, help="Target sample rate to save")
-    p_tts.add_argument("--voice", type=str, default=None, help="Optional TTS voice name")
+    p_tts.add_argument(
+        "--sr", type=int, default=16000, help="Target sample rate to save"
+    )
+    p_tts.add_argument(
+        "--voice", type=str, default=None, help="Optional TTS voice name"
+    )
 
     return parser
 
@@ -225,9 +265,13 @@ def main(argv: Optional[list[str]] = None) -> None:
     args = parser.parse_args(argv)
 
     if args.mode == "file":
-        _handle_file_mode(args.input, args.out, timeout=args.timeout, duration=args.duration)
+        _handle_file_mode(
+            args.input, args.out, timeout=args.timeout, duration=args.duration
+        )
     elif args.mode == "mic":
-        _handle_mic_mode(args.duration, args.out, device=args.device, sample_rate=args.sr)
+        _handle_mic_mode(
+            args.duration, args.out, device=args.device, sample_rate=args.sr
+        )
     elif args.mode == "tts":
         _handle_tts_mode(args.text, args.out, sample_rate=args.sr, voice=args.voice)
     else:

@@ -9,19 +9,11 @@ It uses the existing `aiteacher/audio/start_stop.mp3` file and the
 `AudioFileInputStream` implementation to feed chunks to `AudioParser`.
 """
 
-import sys
 import time
 from pathlib import Path
 
-# When running from tests/ the audio module lives at ../aiteacher/audio
-audio_path = Path(__file__).parent.parent / "aiteacher" / "audio"
-# Also ensure generated modules are importable
-generated_path = Path(__file__).parent.parent / "aiteacher" / "generated"
-sys.path.insert(0, str(audio_path))
-sys.path.insert(0, str(generated_path))
-
-from audio_parser import AudioParser
-from input_stream import AudioFileInputStream
+from aiteacher.audio.audio_parser import AudioParser
+from aiteacher.audio.input_stream import AudioFileInputStream
 
 
 def test_audio_parser_with_input_stream():
@@ -30,7 +22,9 @@ def test_audio_parser_with_input_stream():
     print("=" * 50)
 
     # Path to the test audio file (inside the repo)
-    audio_file_path = Path(__file__).parent.parent / "aiteacher" / "audio" / "start_stop.mp3"
+    audio_file_path = (
+        Path(__file__).parent.parent / "aiteacher" / "audio" / "start_stop.mp3"
+    )
 
     if not audio_file_path.exists():
         print(f"Error: Audio file not found at {audio_file_path}")
@@ -42,14 +36,13 @@ def test_audio_parser_with_input_stream():
     input_stream = AudioFileInputStream(
         file_path=str(audio_file_path),
         sample_rate=16000,
-        chunk_duration=0.1  # 100ms chunks
+        chunk_duration=0.1,  # 100ms chunks
     )
 
     # Initialize the audio parser
     try:
         parser = AudioParser(
-            model_path="vosk-model-small-en-us-0.15",
-            sample_rate=16000
+            model_path="vosk-model-small-en-us-0.15", sample_rate=16000
         )
         print("AudioParser initialized successfully")
     except FileNotFoundError as e:
@@ -82,8 +75,10 @@ def test_audio_parser_with_input_stream():
                 chunk_count += 1
                 chunk_duration = len(audio_chunk) / input_stream.sample_rate
 
-                print(f"\nChunk {chunk_count}: {chunk_duration:.3f}s, "
-                      f"buffer: {input_stream.get_buffer_duration():.2f}s")
+                print(
+                    f"\nChunk {chunk_count}: {chunk_duration:.3f}s, "
+                    f"buffer: {input_stream.get_buffer_duration():.2f}s"
+                )
 
                 # Process chunk through audio parser
                 status, speech_audio = parser.add_chunk(audio_chunk)
@@ -93,7 +88,9 @@ def test_audio_parser_with_input_stream():
                 if speech_audio is not None:
                     speech_duration = len(speech_audio) / parser.sample_rate
                     speech_intervals.append(speech_audio)
-                    print(f"*** SPEECH INTERVAL CAPTURED: {speech_duration:.2f} seconds ***")
+                    print(
+                        f"*** SPEECH INTERVAL CAPTURED: {speech_duration:.2f} seconds ***"
+                    )
                     print(f"Total intervals captured: {len(speech_intervals)}")
 
                 # Show parser buffer status
@@ -106,7 +103,9 @@ def test_audio_parser_with_input_stream():
                 empty_rounds += 1
 
                 # If the stream finished reading file, break
-                if not input_stream._is_running and (audio_chunk is None or len(audio_chunk) == 0):
+                if not input_stream._is_running and (
+                    audio_chunk is None or len(audio_chunk) == 0
+                ):
                     print("\nInput stream finished")
                     break
 
@@ -132,7 +131,7 @@ def test_audio_parser_with_input_stream():
     if speech_intervals:
         for i, interval in enumerate(speech_intervals):
             duration = len(interval) / parser.sample_rate
-            print(f"  Interval {i+1}: {duration:.2f} seconds")
+            print(f"  Interval {i + 1}: {duration:.2f} seconds")
     else:
         print("No speech intervals were captured.")
         print("This could mean:")

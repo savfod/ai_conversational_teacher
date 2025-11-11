@@ -9,6 +9,7 @@ The OpenAI API key is loaded via dotenv from the environment variable
 
 Type hints and Google-style docstrings are used.
 """
+
 from __future__ import annotations
 
 import os
@@ -75,7 +76,13 @@ def _get_client() -> Any:
         ) from exc
 
 
-def speech_to_text(audio_bytes: Union[bytes, bytearray, np.ndarray], language: Optional[str] = "en", sample_rate: int = 16000, *, model: str = "gpt-4o-mini-transcribe") -> str:
+def speech_to_text(
+    audio_bytes: Union[bytes, bytearray, np.ndarray],
+    language: Optional[str] = "en",
+    sample_rate: int = 16000,
+    *,
+    model: str = "gpt-4o-mini-transcribe",
+) -> str:
     """Transcribe audio to text using an OpenAI model.
 
     Args:
@@ -96,7 +103,6 @@ def speech_to_text(audio_bytes: Union[bytes, bytearray, np.ndarray], language: O
     _ensure_openai_available()
 
     try:
-
         # Normalize different input types into a WAV bytes buffer that the
         # OpenAI API understands. Accept either raw audio bytes (already a
         # file like WAV/MP3) or a numeric array (e.g., numpy.ndarray of
@@ -105,9 +111,11 @@ def speech_to_text(audio_bytes: Union[bytes, bytearray, np.ndarray], language: O
 
         if DEBUG:
             import soundfile as sf
-            # save to temp file and play for debugging
-            sf.write("debug_speech_api_input_raw.wav", audio_bytes, sample_rate, format='WAV')
 
+            # save to temp file and play for debugging
+            sf.write(
+                "debug_speech_api_input_raw.wav", audio_bytes, sample_rate, format="WAV"
+            )
 
         wav_buffer: BytesIO
         if isinstance(audio_bytes, (bytes, bytearray)):
@@ -132,7 +140,9 @@ def speech_to_text(audio_bytes: Union[bytes, bytearray, np.ndarray], language: O
 
                 arr = _np.asarray(audio_bytes)
             except Exception:
-                raise RuntimeError("Unsupported audio input type - provide raw bytes or a numpy array of samples")
+                raise RuntimeError(
+                    "Unsupported audio input type - provide raw bytes or a numpy array of samples"
+                )
 
             # Convert to mono if multi-channel by taking first channel
             if arr.ndim > 1:
@@ -163,8 +173,8 @@ def speech_to_text(audio_bytes: Union[bytes, bytearray, np.ndarray], language: O
             params["language"] = language
 
         resp = client.audio.transcriptions.create(
-            **params, 
-            prompt="Please transcribe the following audio precisely (don't fix mistakes)."
+            **params,
+            prompt="Please transcribe the following audio precisely (don't fix mistakes).",
         )
 
         if DEBUG:
@@ -173,7 +183,6 @@ def speech_to_text(audio_bytes: Union[bytes, bytearray, np.ndarray], language: O
             with open("debug_speech_api_input.wav", "wb") as f:
                 f.write(wav_buffer.getbuffer())
                 f.flush()
-
 
         # Prefer attribute access which is the usual shape for the v1 SDK
         try:
@@ -187,7 +196,13 @@ def speech_to_text(audio_bytes: Union[bytes, bytearray, np.ndarray], language: O
         raise RuntimeError(f"speech_to_text failed: {exc}") from exc
 
 
-def text_to_speech(text: str, *, model: str = "gpt-4o-mini-tts", voice: Optional[str] = None, instructions: Optional[str] = None) -> np.ndarray:
+def text_to_speech(
+    text: str,
+    *,
+    model: str = "gpt-4o-mini-tts",
+    voice: Optional[str] = None,
+    instructions: Optional[str] = None,
+) -> np.ndarray:
     """Synthesize speech from text using an OpenAI model and return audio samples.
 
     Args:
@@ -205,16 +220,21 @@ def text_to_speech(text: str, *, model: str = "gpt-4o-mini-tts", voice: Optional
             the API returns an error.
     """
     _ensure_openai_available()
-    if voice is None: 
+    if voice is None:
         voice = "coral"  # default voice
-    
+
     if instructions is None:
         instructions = "Speak in a cheerful and positive tone."
 
     client = _get_client()
     from datetime import datetime
     from pathlib import Path
-    speech_file_path = Path(__file__).parent.parent.parent / "audio" / f"speech_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
+
+    speech_file_path = (
+        Path(__file__).parent.parent.parent
+        / "audio"
+        / f"speech_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
+    )
     with client.audio.speech.with_streaming_response.create(
         model=model,
         voice=voice,
@@ -223,7 +243,6 @@ def text_to_speech(text: str, *, model: str = "gpt-4o-mini-tts", voice: Optional
         instructions=instructions,
     ) as response:
         response.stream_to_file(speech_file_path)
-    
 
     # Read the generated audio file and return as bytes
     data, samplerate = sf.read(str(speech_file_path), dtype="float32")
@@ -233,7 +252,6 @@ def text_to_speech(text: str, *, model: str = "gpt-4o-mini-tts", voice: Optional
 
     if samplerate != 16000:
         data = librosa.resample(data.T, orig_sr=samplerate, target_sr=16000).T
-    
 
     # Clean up the temporary file (keep for debugging during development)
     # speech_file_path.unlink()
