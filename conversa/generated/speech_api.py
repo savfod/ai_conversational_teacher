@@ -254,7 +254,8 @@ def text_to_speech(
         data = librosa.resample(data.T, orig_sr=samplerate, target_sr=16000).T
 
     # Clean up the temporary file (keep for debugging during development)
-    # speech_file_path.unlink()
+    if not DEBUG:
+        speech_file_path.unlink()
 
     return data
 

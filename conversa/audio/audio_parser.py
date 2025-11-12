@@ -26,7 +26,7 @@ class AudioParser:
             sample_rate: Audio sample rate in Hz.
         """
         # Initialize Vosk
-        vosk.SetLogLevel(0)  # Enable Vosk logging for testing
+        vosk.SetLogLevel(-1)  # Disable Vosk logging for testing
 
         # Resolve model path
         model_path_obj = Path(model_path)
@@ -68,7 +68,7 @@ class AudioParser:
 
     @staticmethod
     def _has_stop_seq(text: str) -> bool:
-        """Check if the text contains a stop command.
+        """Check if the text contains a stopping command.
 
         Args:
             text: Recognized text to inspect.
@@ -76,6 +76,7 @@ class AudioParser:
         Returns:
             True if a stop-like token pattern is present, False otherwise.
         """
+        # stop command is "stop stop" to avoid false positives
         return text.lower().count("stop") > 1
 
     def add_chunk(
@@ -106,7 +107,7 @@ class AudioParser:
 
         # Detect stop command
         elif self._state == "listening" and self._has_stop_seq(detected_text):
-            print("STOP command detected - processing speech interval")
+            print("\nSTOP command detected - processing speech interval")
             if self._audio_buffer:
                 optional_audio = np.concatenate(self._audio_buffer)
             else:
@@ -151,15 +152,15 @@ class AudioParser:
         if self.recognizer.AcceptWaveform(audio_data):
             result = json.loads(self.recognizer.Result())
             text = result.get("text", "").strip()
-            print(f"[VOSK] Full result: {result}")  # Print full Vosk result for testing
+            # print(f"[VOSK] Full result: {result}")  # Print full Vosk result for testing
             self._vosk_parsed_buffer.append(text)
             return text
         else:
             # Also check for partial results during testing
             partial_result = json.loads(self.recognizer.PartialResult())
             partial_text = partial_result.get("partial", "").strip()
-            if partial_text:
-                print(f"[VOSK] Partial: {partial_text}")
+            # if partial_text:
+            #     print(f"[VOSK] Partial: {partial_text}")
             cur_text = " " + partial_text
             return cur_text
 

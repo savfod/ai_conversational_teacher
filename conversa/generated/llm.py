@@ -1,16 +1,6 @@
 """Simple OpenAI LLM helper.
 
 This module provides a minimal wrapper to call OpenAI Chat Completions.
-
-Interface:
-
-SYSTEM_PROMPT = ... (global variable)
-
-def answer(query: str, sys_prompt=SYSTEM_PROMPT, history=[]) -> str
-
-Notes:
-- This intentionally keeps the API tiny and lazy-imports `openai` so importing
-  this module does not fail when the package is missing.
 """
 
 import os
@@ -20,10 +10,9 @@ import openai
 
 SYSTEM_PROMPT: str = """
 You are a language teacher. You answer according to the following rules:
-
 - Answer the user's input with a relevant question to keep the conversation going.
 - Ignore the word "start" in the beginning of the conversation and the word "stop" at the end (they are just to start and stop the recording).
-- Answer in the same language as the users input
+- Answer in the same language as the users input.
 """
 
 
@@ -80,7 +69,7 @@ def answer_structured_simple(query: str, sys_prompt: str, answer_format: type[T]
     client = openai.OpenAI()
 
     response = client.responses.parse(
-        model="gpt-4o-2024-08-06",
+        model="gpt-4o-2024-08-06",  # TODO: fix
         input=[
             {"role": "system", "content": sys_prompt},
             {
@@ -201,8 +190,8 @@ def answer(
                     raise RuntimeError(
                         "Unsupported openai client installed; cannot find ChatCompletion or OpenAI client"
                     )
-    except Exception as exc:
-        raise RuntimeError(f"OpenAI API error: {exc}") from exc
+    except Exception as e:
+        raise RuntimeError(f"OpenAI API error: {e}") from e
 
     content = _extract_content(resp)
     return (content or "").strip()

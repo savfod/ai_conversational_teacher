@@ -58,6 +58,7 @@ if __name__ == "__main__":
     )
     # Optionally, convert text back to speech
     tts_audio = text_to_speech("Hello world, this is a test!!")
+    output_stream.start()
     output_stream.write(tts_audio)
 
     print(f"Generated TTS audio of length: {len(tts_audio)} bytes")

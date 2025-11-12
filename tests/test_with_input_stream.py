@@ -117,6 +117,9 @@ def test_audio_parser_with_input_stream():
     except KeyboardInterrupt:
         print("\nStopped by user")
 
+    except Exception as e:
+        print(f"\nError during processing: {e}")
+
     finally:
         # Stop the input stream
         input_stream.stop()

@@ -113,7 +113,7 @@ def main(language: str, file_path: str | None = None) -> None:
                 print(".", end="", flush=True)
 
             if speech is not None:
-                print("\nSpeech interval detected. Transcribing...")
+                print(f"\nSpeech interval detected. Transcribing ({language})...")
                 transcription = speech_to_text(speech, language=language)
                 print(f"Transcription: {transcription}")
 
@@ -141,12 +141,13 @@ def main(language: str, file_path: str | None = None) -> None:
                 print(f"Generated TTS audio of length: {len(tts_audio)} bytes")
 
     except KeyboardInterrupt:
-        print("Stopping microphone stream...")
+        print("Keyboard interrupt received, stopping...")
+
     finally:
         input_stream.stop()
         output_stream.stop()
         output_stream.close()
-        print("Microphone stream stopped.")
+        print("Input stream stopped.")
 
 
 def parse_args() -> argparse.Namespace:
