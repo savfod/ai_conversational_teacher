@@ -1,0 +1,18 @@
+[project]
+name = "ai-conversational-teacher"
+version = "0.0.1"
+description = "An AI-powered conversational language teacher."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "librosa>=0.11.0",
+    "loguru>=0.7.3",
+    "numpy>=2.3.4",
+    "openai>=2.7.1",
+    "pytest>=9.0.0",
+    "pytest-cov>=7.0.0",
+    "python-dotenv>=1.2.1",
+    "sounddevice>=0.5.3",
+    "soundfile>=0.13.1",
+    "vosk==0.3.44",
+]
