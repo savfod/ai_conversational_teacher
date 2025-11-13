@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
+import pytest
 
 from conversa.audio.audio_parser import AudioParser
 from conversa.audio.input_stream import AudioFileInputStream
@@ -180,21 +181,17 @@ class TestAudioParser:
             assert parser.buffered_duration == 0.0
 
 
+@pytest.mark.slow
 def test_with_actual_audio_file():
-    """Integration test using the actual start_stop.mp3 file with input stream."""
-    # Use the existing start_stop.mp3 file
+    """Integration test using the actual error1.wav file with input stream."""
+    # Use the existing error1.wav file
     test_audio_path = (
-        Path(__file__).parent.parent / "conversa" / "audio" / "start_stop.mp3"
+        Path(__file__).parent.parent / "data" / "test_audio" / "error1.wav"
     )
 
     if not test_audio_path.exists():
         print(f"Warning: Test audio file not found at {test_audio_path}")
         return
-
-    # print(f"Testing with audio file: {test_audio_path}")
-    # import soundfile as sf
-    # audio_data, sample_rate = sf.read(str(test_audio_path))
-    # ...
 
     # Test with input stream
     print("Using AudioFileInputStream for testing...")
@@ -207,70 +204,42 @@ def test_with_actual_audio_file():
     )
 
     # Test audio parsing with mocked Vosk
-    with (
-        patch("conversa.audio.audio_parser.vosk.Model"),
-        patch("conversa.audio.audio_parser.vosk.KaldiRecognizer"),
-        patch("conversa.audio.audio_parser.Path.exists", return_value=True),
-    ):
-        parser = AudioParser("vosk-model-small-en-us-0.15", 16000)
+    parser = AudioParser("vosk-model-small-en-us-0.15", 16000)
 
-        # Mock Vosk responses to simulate start and stop detection
-        mock_recognizer = parser.recognizer
+    # Start input stream
+    input_stream.start()
 
-        def mock_accept_waveform(audio_bytes):
-            # Simulate detecting speech periodically
-            return True
+    # Process audio chunks from input stream
+    speech_intervals = []
+    chunk_count = 0
 
-        # Use a class to maintain state instead of function attributes
-        class MockResult:
-            def __init__(self):
-                self.call_count = 0
+    try:
+        for _ in range(100):  # Process up to 50 chunks
+            chunk = input_stream.get_unprocessed_chunk()
+            print(
+                f"Processing chunk {chunk_count}, size: {len(chunk) if chunk is not None else 'None'}"
+            )
+            if chunk is not None and len(chunk) > 0:
+                chunk_count += 1
+                status, audio_interval, _ = parser.add_chunk(chunk)
 
-            def __call__(self):
-                result = self.call_count
-                self.call_count += 1
+                if audio_interval is not None:
+                    speech_intervals.append(audio_interval)
+                    print(
+                        f"Captured speech interval: {len(audio_interval) / 16000:.2f} seconds"
+                    )
 
-                if result == 0:
-                    return '{"text": "start recording please"}'
-                elif result > 10:  # After more chunks for input stream
-                    return '{"text": "stop recording now"}'
-                else:
-                    return '{"text": ""}'
+            time.sleep(0.05)  # Small delay between chunk processing
 
-        mock_recognizer.AcceptWaveform = mock_accept_waveform
-        mock_recognizer.Result = MockResult()
+    finally:
+        input_stream.stop()
 
-        # Start input stream
-        input_stream.start()
-
-        # Process audio chunks from input stream
-        speech_intervals = []
-        chunk_count = 0
-
-        try:
-            for _ in range(50):  # Process up to 50 chunks
-                chunk = input_stream.get_unprocessed_chunk()
-                if chunk is not None and len(chunk) > 0:
-                    chunk_count += 1
-                    status, audio_interval, _ = parser.add_chunk(chunk)
-
-                    if audio_interval is not None:
-                        speech_intervals.append(audio_interval)
-                        print(
-                            f"Captured speech interval: {len(audio_interval) / 16000:.2f} seconds"
-                        )
-
-                time.sleep(0.05)  # Small delay between chunk processing
-
-        finally:
-            input_stream.stop()
-
-        assert (
-            len(speech_intervals) > 0
-        ), "Should have captured at least one speech interval"
-        print(
-            f"Successfully captured {len(speech_intervals)} speech interval(s) using input stream"
-        )
+    assert (
+        len(speech_intervals) > 0
+    ), "Should have captured at least one speech interval"
+    print(
+        f"Successfully captured {len(speech_intervals)} speech interval(s) using input stream"
+    )
 
 
 def _test_with_direct_audio_data(audio_data, sample_rate):
