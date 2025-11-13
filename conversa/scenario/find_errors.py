@@ -37,8 +37,8 @@ def check_for_errors(query: str) -> str:
         query: User-provided text to analyze.
 
     Returns:
-        A formatted string describing each detected error. Returns an empty
-        string when no errors are found.
+        A formatted string describing each detected error. If no errors are found,
+        returns an empty string.
     """
     errs = answer_structured_simple(
         query=query,

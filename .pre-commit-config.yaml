@@ -30,7 +30,7 @@ repos:
     - id: pytest
       name: pytest
       # todo: fix coverage later
-      # entry: uv run -m pytest --cov=aiteacher tests -m "not slow"
+      # entry: uv run -m pytest --cov=conversa tests -m "not slow"
       entry: uv run -m pytest tests -m "not slow"
       language: system
       pass_filenames: false

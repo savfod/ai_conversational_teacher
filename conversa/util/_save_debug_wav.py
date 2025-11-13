@@ -8,9 +8,9 @@ This script is intended as a small debugging utility. It supports three modes:
 
 Usage examples:
 
-    python -m conversa.generated._save_debug_wav file --input audio.mp3 --out out.wav
-    python -m conversa.generated._save_debug_wav mic --duration 5 --out mic.wav
-    python -m conversa.generated._save_debug_wav tts --text "Hello world" --out tts.wav
+    python -m conversa.util._save_debug_wav file --input audio.mp3 --out out.wav
+    python -m conversa.util._save_debug_wav mic --duration 5 --out mic.wav
+    python -m conversa.util._save_debug_wav tts --text "Hello world" --out tts.wav
 
 This file intentionally has no tests (debug helper).
 """

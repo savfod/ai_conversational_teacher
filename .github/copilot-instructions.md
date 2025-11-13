@@ -17,7 +17,7 @@ Please follow these guidelines when updating or adding new code:
       * don't use fallbacks excluding cases when it is a planned behavior in normal settings (e.g. network failed to send request)
   * if some approach seems to be not the best, please clearly state it and wait for confirmation
 
-2. New files should be added to aiteacher/generated/ directory
+2. New files should be added to conversa/generated/ directory
 
 3. Use type hints for all functions and methods
 

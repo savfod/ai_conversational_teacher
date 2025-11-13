@@ -184,7 +184,7 @@ def test_with_actual_audio_file():
     """Integration test using the actual start_stop.mp3 file with input stream."""
     # Use the existing start_stop.mp3 file
     test_audio_path = (
-        Path(__file__).parent.parent / "aiteacher" / "audio" / "start_stop.mp3"
+        Path(__file__).parent.parent / "conversa" / "audio" / "start_stop.mp3"
     )
 
     if not test_audio_path.exists():
