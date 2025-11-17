@@ -1,8 +1,8 @@
 import datetime
 
+from conversa.generated.llm import answer_structured_simple
 from pydantic import BaseModel
 
-from conversa.generated.llm import answer_structured_simple
 from conversa.util.io import DEFAULT_MISTAKES_FILE, append_to_jsonl_file
 
 
