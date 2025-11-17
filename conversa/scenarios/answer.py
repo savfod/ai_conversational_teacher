@@ -1,3 +1,5 @@
+from typing import Iterable
+
 from conversa.features.llm_api import call_llm
 
 SYSTEM_PROMPT: str = """
@@ -10,16 +12,19 @@ You are a language teacher and a helpful assistant. You answer according to the 
 
 def teacher_answer(
     query: str,
+    history: Iterable[dict[str, str]] = tuple(),
 ) -> str:
     """Return a language teacher LLM answer for `query`.
 
     Args:
         query: The user's prompt/question.
-
+        history: Optional list of prior messages. Each item must be a dict
+            with keys 'role' and 'content'.
     Returns:
         A string containing the language teacher's answer.
     """
     return call_llm(
         query=query,
         sys_prompt=SYSTEM_PROMPT,
+        history=history,
     )

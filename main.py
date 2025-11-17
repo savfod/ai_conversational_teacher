@@ -97,6 +97,7 @@ def main(language: str, file_path: str | None = None) -> None:
     )
     output_stream.start()
 
+    history = []
     try:
         while True:
             time.sleep(0.5)
@@ -115,6 +116,7 @@ def main(language: str, file_path: str | None = None) -> None:
             if speech is not None:
                 print(f"\nSpeech interval detected. Transcribing ({language})...")
                 transcription = speech_to_text(speech, language=language)
+                history.append({"role": "user", "content": transcription})
                 print(f"Transcription: {transcription}")
 
                 errs_message = check_for_errors(transcription)
@@ -127,7 +129,8 @@ def main(language: str, file_path: str | None = None) -> None:
                         )
                     )
 
-                reply = teacher_answer(transcription)
+                reply = teacher_answer(transcription, history=history)
+                history.append({"role": "assistant", "content": reply})
                 print(f"LLM Reply: {reply}")
 
                 # Optionally, convert text back to speech
