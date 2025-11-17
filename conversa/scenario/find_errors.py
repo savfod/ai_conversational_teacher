@@ -1,6 +1,9 @@
+import datetime
+
 from pydantic import BaseModel
 
 from conversa.generated.llm import answer_structured_simple
+from conversa.util.io import DEFAULT_MISTAKES_FILE, append_to_jsonl_file
 
 
 class ErrorDetail(BaseModel):
@@ -48,10 +51,21 @@ def check_for_errors(query: str) -> str:
 
     errs_answers: list[str] = []
 
+    if len(errs.errors) > 0:
+        print(f'Saving {len(errs.errors)} mistakes to "{DEFAULT_MISTAKES_FILE}"')
+
     for err in errs.errors:
         errs_answers.append(
             f"You said: '{err.incorrect_part}'. "
             f"This is incorrect. {err.error_description}. "
             f"Corrected part: '{err.corrected_part}'\n"
         )
+
+        data = err.model_dump()
+        data["timestamp"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        append_to_jsonl_file(
+            data,
+            DEFAULT_MISTAKES_FILE,
+        )
+
     return "\n".join(errs_answers)

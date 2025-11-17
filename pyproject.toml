@@ -5,6 +5,7 @@ description = "An AI-powered conversational language teacher."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "appdirs>=1.4.4",
     "librosa>=0.11.0",
     "loguru>=0.7.3",
     "numpy>=2.3.4",
