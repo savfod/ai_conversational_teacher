@@ -1,4 +1,4 @@
-"""Simple OpenAI LLM helper.
+"""Text LLM calling helper.
 
 This module provides a minimal wrapper to call OpenAI Chat Completions.
 """
