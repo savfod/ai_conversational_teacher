@@ -6,9 +6,9 @@ import sounddevice as sd
 
 from conversa.audio.audio_parser import AudioParser
 from conversa.audio.input_stream import AudioFileInputStream, MicrophoneInputStream
-from conversa.generated.llm import answer
+from conversa.features.find_errors import check_for_errors
 from conversa.generated.speech_api import speech_to_text, text_to_speech
-from conversa.scenario.find_errors import check_for_errors
+from conversa.scenarios.answer import teacher_answer
 from conversa.util.logs import setup_logging
 
 
@@ -127,7 +127,7 @@ def main(language: str, file_path: str | None = None) -> None:
                         )
                     )
 
-                reply = answer(transcription)
+                reply = teacher_answer(transcription)
                 print(f"LLM Reply: {reply}")
 
                 # Optionally, convert text back to speech
