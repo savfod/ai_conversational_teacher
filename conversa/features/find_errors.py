@@ -1,8 +1,8 @@
 import datetime
 
-from conversa.generated.llm import answer_structured_simple
 from pydantic import BaseModel
 
+from conversa.features.llm_api import call_llm_structured
 from conversa.util.io import DEFAULT_MISTAKES_FILE, append_to_jsonl_file
 
 
@@ -43,7 +43,7 @@ def check_for_errors(query: str) -> str:
         A formatted string describing each detected error. If no errors are found,
         returns an empty string.
     """
-    errs = answer_structured_simple(
+    errs = call_llm_structured(
         query=query,
         sys_prompt=SYS_PROMPT_ERRORS,
         answer_format=Errors,
