@@ -8,6 +8,8 @@ from typing import Any, Iterable, TypeVar
 import dotenv
 import openai
 
+from conversa.util.logs import log_function_duration
+
 dotenv.load_dotenv()
 
 # models
@@ -24,11 +26,12 @@ def _check_history_format(history: Iterable[Any]) -> None:
         ValueError: If a history item has an unsupported shape.
     """
     for item in history:
-        assert isinstance(item, (dict))
+        assert isinstance(item, dict)
         assert "role" in item and "content" in item
         assert item["role"] in ("user", "assistant")
 
 
+@log_function_duration()
 def call_llm_structured(
     query: str,
     sys_prompt: str,
@@ -71,6 +74,7 @@ def call_llm_structured(
     return answer
 
 
+@log_function_duration()
 def call_llm(
     query: str,
     sys_prompt: str,

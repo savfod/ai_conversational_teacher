@@ -167,11 +167,17 @@ def parse_args() -> argparse.Namespace:
         nargs="?",
         help="Language code for speech recognition and processing (default: en).",
     )
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Logging level (default: INFO).",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
-    setup_logging(level="INFO")
-
     args = parse_args()
+    setup_logging(level=args.log_level)
     main(language=args.language, file_path=args.file)
