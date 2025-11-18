@@ -214,7 +214,7 @@ def test_with_actual_audio_file():
     chunk_count = 0
 
     try:
-        for _ in range(100):  # Process up to 50 chunks
+        for _ in range(100):  # Process up to 100 chunks
             chunk = input_stream.get_unprocessed_chunk()
             print(
                 f"Processing chunk {chunk_count}, size: {len(chunk) if chunk is not None else 'None'}"

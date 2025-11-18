@@ -12,7 +12,7 @@ Planned: statistics tracking, and vocabulary export.
   - ✅ Enable/disable voice input with "start" and "stop stop" (twice for reliability) commands
 
 - **Configuration System**: Comprehensive settings for personalized learning
-  - ✅ Language (use 'uv run conversa CODE', where CODE is a language code from ISO 639-1, [supported](https://platform.openai.com/docs/guides/speech-to-text/supported-languages#supported-languages) by OpenAI)
+  - ✅ Language (use 'uv run main.py CODE', where CODE is a language code from ISO 639-1, [supported](https://platform.openai.com/docs/guides/speech-to-text/supported-languages#supported-languages) by OpenAI)
   - ❌ Proficiency level (beginner, intermediate, advanced)
   - ❌ Native language for explanations
 
