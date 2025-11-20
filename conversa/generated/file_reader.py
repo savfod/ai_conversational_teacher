@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Iterator, Literal
 
 import sounddevice as sd
+from bs4 import BeautifulSoup
+from ebooklib import ITEM_DOCUMENT, epub
 
 from conversa.features.llm_api import call_llm
 from conversa.generated.speech_api import text_to_speech
@@ -60,11 +62,17 @@ class FileReader:
 
         Returns:
             The full text content of the epub
-
-        Raises:
-            NotImplementedError: This feature is not yet implemented
         """
-        raise NotImplementedError("EPUB support will be added in a future version")
+        all_text = []
+        book = epub.read_epub(self.file_path)
+        for item in book.get_items():
+            if item.get_type() == ITEM_DOCUMENT:
+                content = item.get_content()
+                soup = BeautifulSoup(content, "html.parser")
+                all_text.append(soup.get_text())
+
+        full_text = "\n\n".join(all_text)
+        return full_text
 
     def load_data(self) -> str:
         """Load data from the file based on its extension.
