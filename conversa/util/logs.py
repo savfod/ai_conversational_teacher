@@ -42,7 +42,11 @@ def log_function_duration(name: str | None = None):
     """
     Decorator to log the duration of a function call.
 
-    Usage:
+    Args:
+        name (str, optional): Name to use in the log message.
+            If not provided, the function's name will be used.
+
+    Example usage:
         @log_function_duration(name="MyFunction")
         def my_function():
             # Function implementation
@@ -53,9 +57,6 @@ def log_function_duration(name: str | None = None):
             # Function implementation
             pass
 
-    Args:
-        name (str, optional): Name to use in the log message.
-            If not provided, the function's name will be used.
     """
 
     def decorator(func):

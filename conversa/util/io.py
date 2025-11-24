@@ -20,8 +20,8 @@ def append_to_jsonl_file(data: dict, fpath: Path) -> None:
     """
     fpath.parent.mkdir(parents=True, exist_ok=True)
     try:
-        with open(fpath, "a") as f:
-            json.dump(data, f)
+        with open(fpath, "a", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
             f.write("\n")
     except IOError as e:
         print(f"Failed to save data to file {fpath}: {e}")
@@ -40,7 +40,7 @@ def read_jsonl_file(fpath: Path) -> list[dict]:
     if not fpath.exists():
         return data
     try:
-        with open(fpath, "r") as f:
+        with open(fpath, "r", encoding="utf-8") as f:
             for line in f:
                 data.append(json.loads(line))
     except IOError as e:
@@ -57,7 +57,7 @@ def read_json(fpath: str | Path) -> Any:
     Returns:
         Data loaded from the JSON file.
     """
-    with open(fpath, "r") as f:
+    with open(fpath, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -70,5 +70,5 @@ def write_json(data: Any, fpath: str | Path) -> None:
     """
     fpath = Path(fpath)
     fpath.parent.mkdir(parents=True, exist_ok=True)
-    with open(fpath, "w") as f:
-        json.dump(data, f, indent=4)
+    with open(fpath, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)

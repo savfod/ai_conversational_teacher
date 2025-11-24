@@ -10,6 +10,7 @@ import openai
 
 from conversa.util.logs import log_function_duration
 
+# todo: move to CLI, when it is ready
 dotenv.load_dotenv()
 
 # models

@@ -146,7 +146,7 @@ class AudioParser:
             starting with a space; full results are returned as the text.
         """
         # vosk processes new chunk, saving partial results, and removing buffer with saving full results
-        # todo: switch to manual logic with recognize(), not add_chunk()
+        # todo: switch to manual logic with recognize(), current logic adds it on the vosk side
         audio_data = self._preprocess_vosk_chunk(audio_chunk)
 
         if self.recognizer.AcceptWaveform(audio_data):

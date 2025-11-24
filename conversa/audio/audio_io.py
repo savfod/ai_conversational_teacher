@@ -39,7 +39,7 @@ def save_audio(
         )
 
     except Exception as e:
-        print(f"Error saving WAV file {output_path}: {e}")
+        print(f"Error saving file {output_path}: {e}")
 
 
 def read_audio(file_path: str | Path, sample_rate: int = 16000) -> np.ndarray:
