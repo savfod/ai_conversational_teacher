@@ -19,4 +19,6 @@ def test_log_function_duration(tmp_path):
     result = timed_func()
 
     assert result == 42
-    assert "timed_func completed in:" in open(log_path).read()
+    with open(log_path) as f:
+        log_contents = f.read()
+    assert "timed_func completed in:" in log_contents

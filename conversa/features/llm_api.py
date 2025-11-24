@@ -3,7 +3,7 @@
 This module provides a minimal wrapper to call OpenAI Chat Completions.
 """
 
-from typing import Any, Iterable, TypeVar
+from typing import Any, Sequence, TypeVar
 
 import dotenv
 import openai
@@ -20,7 +20,7 @@ DEFAULT_TEXT_MODEL = "gpt-4o-mini-2024-07-18"
 T = TypeVar("T")
 
 
-def _check_history_format(history: Iterable[Any]) -> None:
+def _check_history_format(history: Sequence[Any]) -> None:
     """Check that history items are in supported format.
 
     Raises:
@@ -37,8 +37,8 @@ def call_llm_structured(
     query: str,
     sys_prompt: str,
     answer_format: type[T],
-    model=DEFAULT_STRUCTURED_MODEL,
-    history: Iterable[Any] = tuple(),
+    model: str = DEFAULT_STRUCTURED_MODEL,
+    history: Sequence[Any] = tuple(),
 ) -> T:
     """Return an LLM answer for `query`, parsed into a structured format.
 
@@ -79,7 +79,7 @@ def call_llm_structured(
 def call_llm(
     query: str,
     sys_prompt: str,
-    history: Iterable[Any] = tuple(),
+    history: Sequence[Any] = tuple(),
     model: str = DEFAULT_TEXT_MODEL,
 ) -> str:
     """Return an LLM answer for `query`.

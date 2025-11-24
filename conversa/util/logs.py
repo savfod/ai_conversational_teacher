@@ -32,7 +32,7 @@ def setup_logging(
         None
     """
     loguru.logger.remove()
-    loguru.logger.add(sink=sys.stdout, level=level)
+    loguru.logger.add(sink=sys.stderr, level=level)
     loguru.logger.add(
         sink=f"logs/{time.strftime('%Y-%m-%d')}.log", level=level, rotation="00:00"
     )

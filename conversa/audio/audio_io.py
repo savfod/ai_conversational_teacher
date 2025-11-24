@@ -1,8 +1,7 @@
 """
 Output stream helpers.
 
-This module provides a standalone save_wav function moved out of
-`conversa.audio.input_stream` so it can be reused elsewhere.
+This module provides a public API to read and save audio files.
 """
 
 from pathlib import Path
@@ -47,7 +46,7 @@ def read_audio(file_path: str | Path, sample_rate: int = 16000) -> np.ndarray:
 
     Args:
         file_path: Path to the audio file.
-        sample_rate: Desired sample rate. If None, original sample rate is used.
+        sample_rate: Desired sample rate.
 
     Returns:
         Audio data as a 1-D numpy array of dtype float32 (mono).
@@ -58,12 +57,15 @@ def read_audio(file_path: str | Path, sample_rate: int = 16000) -> np.ndarray:
         raise FileNotFoundError(f"Audio file not found: {file_path}")
 
     # Load audio file using librosa (supports MP3, WAV, FLAC, etc.)
-    audio_data, _original_sr = librosa.load(
+    audio_data, effective_sr = librosa.load(
         str(file_path),
         sr=sample_rate,  # Resample to target sample rate
         mono=True,  # Convert to mono
     )
 
+    assert effective_sr == sample_rate, (
+        f"Unexpected sample rate after loading: {effective_sr} Hz, expected {sample_rate} Hz."
+    )
     duration = len(audio_data) / sample_rate
     print(
         f"Loaded audio file: {file_path.name}, {duration:.2f} seconds, "

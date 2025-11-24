@@ -132,7 +132,7 @@ class AudioParser:
             audio_chunk = audio_chunk[:, 0]
 
         int16_chunk = (np.clip(audio_chunk, -1.0, 1.0) * 32767).astype(np.int16)
-        return int16_chunk.tobytes()
+        return int16_chunk.astype("<i2", copy=False).tobytes()  # little-endian
 
     def _add_vosk_chunk(self, audio_chunk: np.ndarray) -> str:
         """Process a new audio chunk through Vosk and return recognized text.

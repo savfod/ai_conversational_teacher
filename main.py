@@ -24,6 +24,7 @@ def _save(message: dict, time_str: str) -> None:
 
     Args:
         message: A dictionary representing the message to save.
+        time_str: Timestamp string for logging purposes.
 
     Returns:
         None

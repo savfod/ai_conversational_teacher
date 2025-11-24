@@ -41,8 +41,12 @@ def read_jsonl_file(fpath: Path) -> list[dict]:
         return data
     try:
         with open(fpath, "r", encoding="utf-8") as f:
-            for line in f:
-                data.append(json.loads(line))
+            for i, line in enumerate(f):
+                try:
+                    data.append(json.loads(line))
+                    assert isinstance(data[-1], dict)
+                except Exception as e:
+                    print(f"Failed to decode JSON line {i} in file {fpath}: {e}")
     except IOError as e:
         print(f"Failed to read data from file {fpath}: {e}")
     return data
