@@ -1,5 +1,3 @@
-import datetime
-
 from pydantic import BaseModel
 
 from conversa.features.llm_api import call_llm_structured
@@ -29,7 +27,7 @@ Ignore the word "start" in the beginning of the conversation and the word "stop"
 """
 
 
-def check_for_errors(query: str) -> str:
+def check_for_errors(query: str, time_str: str) -> str:
     """Analyze input text for language errors and return a human-readable report.
 
     This function calls an LLM-based structured parser to identify language
@@ -38,6 +36,7 @@ def check_for_errors(query: str) -> str:
 
     Args:
         query: User-provided text to analyze.
+        time_str: Timestamp string for logging purposes.
 
     Returns:
         A formatted string describing each detected error. If no errors are found,
@@ -65,7 +64,7 @@ def check_for_errors(query: str) -> str:
         )
 
         data = err.model_dump()
-        data["timestamp"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        data["timestamp"] = time_str
         append_to_jsonl_file(
             data,
             DEFAULT_MISTAKES_FILE,

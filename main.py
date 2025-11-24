@@ -5,16 +5,21 @@ import time
 import numpy as np
 import sounddevice as sd
 
+from conversa.audio.audio_io import save_audio
 from conversa.audio.audio_parser import AudioParser
 from conversa.audio.input_stream import AudioFileInputStream, MicrophoneInputStream
 from conversa.features.find_errors import check_for_errors
 from conversa.generated.speech_api import speech_to_text, text_to_speech
 from conversa.scenarios.answer import teacher_answer
-from conversa.util.io import DEFAULT_CONVERSATIONS_FILE, append_to_jsonl_file
+from conversa.util.io import (
+    DEFAULT_AUDIO_DIR,
+    DEFAULT_CONVERSATIONS_FILE,
+    append_to_jsonl_file,
+)
 from conversa.util.logs import setup_logging
 
 
-def _save(message: dict) -> None:
+def _save(message: dict, time_str: str) -> None:
     """Save a message to the conversations log file.
 
     Args:
@@ -23,7 +28,6 @@ def _save(message: dict) -> None:
     Returns:
         None
     """
-    time_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
     message = {"timestamp": time_str, **message}
     append_to_jsonl_file(message, DEFAULT_CONVERSATIONS_FILE)
 
@@ -131,13 +135,17 @@ def main(language: str, file_path: str | None = None) -> None:
 
             if speech is not None:
                 print(f"\nSpeech interval detected. Transcribing ({language})...")
+                time_id = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
+                audio_file_path = DEFAULT_AUDIO_DIR / f"speech_{time_id}.wav"
+                save_audio(speech, audio_file_path, sample_rate=16000)
+
                 transcription = speech_to_text(speech, language=language)
                 new_message = {"role": "user", "content": transcription}
-                _save(new_message)
+                _save(new_message, time_str=time_id)
                 history.append(new_message)
                 print(f"Transcription: {transcription}")
 
-                errs_message = check_for_errors(transcription)
+                errs_message = check_for_errors(transcription, time_str=time_id)
                 if errs_message:
                     print(f"Errors found:\n{errs_message}")
                     output_stream.write(
@@ -149,7 +157,7 @@ def main(language: str, file_path: str | None = None) -> None:
 
                 reply = teacher_answer(transcription, history=history)
                 new_message = {"role": "assistant", "content": reply}
-                _save(new_message)
+                _save(new_message, time_str=time_id)
                 history.append(new_message)
                 print(f"LLM Reply: {reply}")
 
@@ -175,6 +183,9 @@ def main(language: str, file_path: str | None = None) -> None:
             "Text of the conversation can be found in the following file:"
             f"\nfile://{DEFAULT_CONVERSATIONS_FILE}"
         )
+        print(
+            f"Audio files saved in the following directory:\nfile://{DEFAULT_AUDIO_DIR}"
+        )
 
 
 def parse_args() -> argparse.Namespace:
@@ -185,12 +196,14 @@ def parse_args() -> argparse.Namespace:
         type=str,
         help="Path to an audio file to process instead of using the microphone.",
     )
+
     parser.add_argument(
         "language",
         default="en",
         nargs="?",
         help="Language code for speech recognition and processing (default: en).",
     )
+
     parser.add_argument(
         "--log-level",
         type=str,
