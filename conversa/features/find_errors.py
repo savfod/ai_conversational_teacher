@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 
-from conversa.generated.llm import answer_structured_simple
+from conversa.features.llm_api import call_llm_structured
+from conversa.util.io import DEFAULT_MISTAKES_FILE, append_to_jsonl_file
 
 
 class ErrorDetail(BaseModel):
@@ -26,7 +27,7 @@ Ignore the word "start" in the beginning of the conversation and the word "stop"
 """
 
 
-def check_for_errors(query: str) -> str:
+def check_for_errors(query: str, time_str: str) -> str:
     """Analyze input text for language errors and return a human-readable report.
 
     This function calls an LLM-based structured parser to identify language
@@ -35,12 +36,13 @@ def check_for_errors(query: str) -> str:
 
     Args:
         query: User-provided text to analyze.
+        time_str: Timestamp string for logging purposes.
 
     Returns:
         A formatted string describing each detected error. If no errors are found,
         returns an empty string.
     """
-    errs = answer_structured_simple(
+    errs = call_llm_structured(
         query=query,
         sys_prompt=SYS_PROMPT_ERRORS,
         answer_format=Errors,
@@ -48,10 +50,24 @@ def check_for_errors(query: str) -> str:
 
     errs_answers: list[str] = []
 
+    if len(errs.errors) > 0:
+        print(
+            f"Saving {len(errs.errors)} mistakes to the following file:"
+            f"\nfile://{DEFAULT_MISTAKES_FILE}"
+        )
+
     for err in errs.errors:
         errs_answers.append(
             f"You said: '{err.incorrect_part}'. "
             f"This is incorrect. {err.error_description}. "
             f"Corrected part: '{err.corrected_part}'\n"
         )
+
+        data = err.model_dump()
+        data["timestamp"] = time_str
+        append_to_jsonl_file(
+            data,
+            DEFAULT_MISTAKES_FILE,
+        )
+
     return "\n".join(errs_answers)

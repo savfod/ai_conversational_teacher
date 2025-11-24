@@ -23,6 +23,8 @@ import openai
 import soundfile as sf
 from dotenv import load_dotenv
 
+from conversa.util.logs import log_function_duration
+
 # Load environment variables from a .env file if present
 load_dotenv()
 
@@ -76,6 +78,7 @@ def _get_client() -> Any:
         ) from exc
 
 
+@log_function_duration()
 def speech_to_text(
     audio_bytes: Union[bytes, bytearray, np.ndarray],
     language: Optional[str] = "en",
@@ -196,6 +199,7 @@ def speech_to_text(
         raise RuntimeError(f"speech_to_text failed: {exc}") from exc
 
 
+@log_function_duration()
 def text_to_speech(
     text: str,
     *,

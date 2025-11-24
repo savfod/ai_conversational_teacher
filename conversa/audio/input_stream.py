@@ -12,10 +12,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-import librosa
 import numpy as np
 import sounddevice as sd
 import soundfile as sf
+
+from conversa.audio.audio_io import read_audio
 
 
 class AudioBuffer:
@@ -249,34 +250,6 @@ class AudioFileInputStream(AbstractAudioInputStream):
         # Note: File existence will be checked in _load_and_convert_mp3()
         # This allows for fallback behavior if file doesn't exist
 
-    def _load_and_convert_mp3(self) -> np.ndarray:
-        """Load and convert an audio file to a numpy array using librosa.
-
-        Returns:
-            Audio data as a 1-D numpy array of dtype float32 (mono).
-
-        Raises:
-            FileNotFoundError: If the audio file does not exist.
-        """
-        # Check if file exists first
-        if not self.file_path.exists():
-            raise FileNotFoundError(f"Audio file not found: {self.file_path}")
-
-        # Load audio file using librosa (supports MP3, WAV, FLAC, etc.)
-        audio_data, original_sr = librosa.load(
-            str(self.file_path),
-            sr=self.sample_rate,  # Resample to target sample rate
-            mono=True,  # Convert to mono
-        )
-
-        duration = len(audio_data) / self.sample_rate
-        print(
-            f"Loaded audio file: {self.file_path.name}, {duration:.2f} seconds, "
-            f"{self.sample_rate} Hz, {len(audio_data)} samples"
-        )
-
-        return audio_data.astype(np.float32)
-
     def _audio_processing_loop(self) -> None:
         """Audio processing loop for MP3/file input.
 
@@ -285,7 +258,7 @@ class AudioFileInputStream(AbstractAudioInputStream):
         """
         try:
             # Load the entire audio file
-            audio_data = self._load_and_convert_mp3()
+            audio_data = read_audio(self.file_path, sample_rate=self.sample_rate)
             total_samples = len(audio_data)
             current_position = 0
 

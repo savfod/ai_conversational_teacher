@@ -1,15 +1,36 @@
 import argparse
+import datetime
 import time
 
 import numpy as np
 import sounddevice as sd
 
+from conversa.audio.audio_io import save_audio
 from conversa.audio.audio_parser import AudioParser
 from conversa.audio.input_stream import AudioFileInputStream, MicrophoneInputStream
-from conversa.generated.llm import answer
+from conversa.features.find_errors import check_for_errors
 from conversa.generated.speech_api import speech_to_text, text_to_speech
-from conversa.scenario.find_errors import check_for_errors
+from conversa.scenarios.answer import teacher_answer
+from conversa.util.io import (
+    DEFAULT_AUDIO_DIR,
+    DEFAULT_CONVERSATIONS_FILE,
+    append_to_jsonl_file,
+)
 from conversa.util.logs import setup_logging
+
+
+def _save(message: dict, time_str: str) -> None:
+    """Save a message to the conversations log file.
+
+    Args:
+        message: A dictionary representing the message to save.
+        time_str: Timestamp string for logging purposes.
+
+    Returns:
+        None
+    """
+    message = {"timestamp": time_str, **message}
+    append_to_jsonl_file(message, DEFAULT_CONVERSATIONS_FILE)
 
 
 def send_tone_signal(output_stream: "sd.OutputStream", signal: str) -> None:
@@ -97,6 +118,7 @@ def main(language: str, file_path: str | None = None) -> None:
     )
     output_stream.start()
 
+    history = []
     try:
         while True:
             time.sleep(0.5)
@@ -114,10 +136,17 @@ def main(language: str, file_path: str | None = None) -> None:
 
             if speech is not None:
                 print(f"\nSpeech interval detected. Transcribing ({language})...")
+                time_id = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
+                audio_file_path = DEFAULT_AUDIO_DIR / f"speech_{time_id}.wav"
+                save_audio(speech, audio_file_path, sample_rate=16000)
+
                 transcription = speech_to_text(speech, language=language)
+                new_message = {"role": "user", "content": transcription}
+                _save(new_message, time_str=time_id)
+                history.append(new_message)
                 print(f"Transcription: {transcription}")
 
-                errs_message = check_for_errors(transcription)
+                errs_message = check_for_errors(transcription, time_str=time_id)
                 if errs_message:
                     print(f"Errors found:\n{errs_message}")
                     output_stream.write(
@@ -127,7 +156,10 @@ def main(language: str, file_path: str | None = None) -> None:
                         )
                     )
 
-                reply = answer(transcription)
+                reply = teacher_answer(transcription, history=history)
+                new_message = {"role": "assistant", "content": reply}
+                _save(new_message, time_str=time_id)
+                history.append(new_message)
                 print(f"LLM Reply: {reply}")
 
                 # Optionally, convert text back to speech
@@ -148,6 +180,13 @@ def main(language: str, file_path: str | None = None) -> None:
         output_stream.stop()
         output_stream.close()
         print("Input stream stopped.")
+        print(
+            "Text of the conversation can be found in the following file:"
+            f"\nfile://{DEFAULT_CONVERSATIONS_FILE}"
+        )
+        print(
+            f"Audio files saved in the following directory:\nfile://{DEFAULT_AUDIO_DIR}"
+        )
 
 
 def parse_args() -> argparse.Namespace:
@@ -158,17 +197,25 @@ def parse_args() -> argparse.Namespace:
         type=str,
         help="Path to an audio file to process instead of using the microphone.",
     )
+
     parser.add_argument(
         "language",
         default="en",
         nargs="?",
         help="Language code for speech recognition and processing (default: en).",
     )
+
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Logging level (default: INFO).",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
-    setup_logging(level="INFO")
-
     args = parse_args()
+    setup_logging(level=args.log_level)
     main(language=args.language, file_path=args.file)
