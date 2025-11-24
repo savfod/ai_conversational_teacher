@@ -11,12 +11,47 @@ import argparse
 from pathlib import Path
 from typing import Iterator, Literal
 
+import numpy as np
 import sounddevice as sd
 from bs4 import BeautifulSoup
 from ebooklib import ITEM_DOCUMENT, epub
 
 from conversa.features.llm_api import call_llm
 from conversa.generated.speech_api import text_to_speech
+from conversa.util.io import DEFAULT_READING_STATUS, read_json, write_json
+
+
+class ReadingStatus:
+    """Class to manage reading status persistence."""
+
+    def __init__(self, file_id: str, status_file: str | Path = DEFAULT_READING_STATUS):
+        self.file_id = file_id
+        self.status_file = Path(status_file)
+        self.status = self._load_status()
+
+    def _load_status(self) -> dict:
+        """Load reading status from the JSON file."""
+        if self.status_file.exists():
+            return read_json(self.status_file)
+        return {}
+
+    def get_last_position(self) -> int:
+        """Get the last read position for a given file."""
+        return self.status.get(self.file_id, 0)
+
+    def update_position(self, position: int) -> None:
+        """Update the last read position for a given file."""
+        self.status[self.file_id] = position
+        write_json(self.status, self.status_file)
+
+    def print_info(self):
+        """Print current reading status info."""
+        last_pos = self.get_last_position()
+        print(
+            f"File ID: {self.file_id}, read position: {last_pos}."
+            "\nThe setting can be found in the file:"
+            f"\nfile://{self.status_file}"
+        )
 
 
 class FileReader:
@@ -44,6 +79,7 @@ class FileReader:
         self.simplify = simplify
         self.target_language = target_language
         self.simplification_level = simplification_level
+        self.reading_status = ReadingStatus(str(self.file_path))
 
         if not self.file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
@@ -92,7 +128,7 @@ class FileReader:
         else:
             raise ValueError(f"Unsupported file format: {extension}")
 
-    def _split_into_chunks(self, text: str) -> Iterator[str]:
+    def _split_into_chunks(self, text: str) -> Iterator[tuple[str, int]]:
         """Split text into chunks of approximately chunk_size characters.
 
         Tries to break at sentence boundaries when possible.
@@ -108,6 +144,11 @@ class FileReader:
 
         start = 0
         text_length = len(text)
+        last_position = self.reading_status.get_last_position()
+        if last_position < text_length:
+            print(f"Resuming from saved position {last_position}/{text_length}")
+            self.reading_status.print_info()
+            start = last_position
 
         while start < text_length:
             end = start + self.chunk_size
@@ -125,7 +166,8 @@ class FileReader:
                         end = start + last_sep + len(separator)
                         break
 
-            yield text[start:end].strip()
+            yield text[start:end].strip(), end
+
             start = end
 
     def _simplify_text(self, text: str) -> str:
@@ -154,49 +196,40 @@ Text to simplify:
         simplified = call_llm(query=user_prompt, sys_prompt=sys_prompt)
         return simplified.strip()
 
-    def process_chunks(self) -> Iterator[str]:
-        """Process file content in chunks.
-
-        Yields:
-            Processed text chunks (simplified if requested)
-        """
-        content = self.load_data()
-
-        for chunk in self._split_into_chunks(content):
-            if self.simplify:
-                chunk = self._simplify_text(chunk)
-            yield chunk
-
-    def read_aloud(self, chunk: str, stream: sd.OutputStream) -> None:
-        """Read a text chunk using text-to-speech.
-
-        Args:
-            chunk: The text to read aloud
-        """
-        audio = text_to_speech(
+    def _text_to_speech(self, chunk: str) -> np.ndarray:
+        """Convert text chunk to speech audio."""
+        return text_to_speech(
             chunk,
             instructions=f"Read the text in clear {self.target_language} pronunciation, please. Use speed appropriate for language learners on {self.simplification_level} level. Be expressive and cheerful.",
         )
-        sd.wait()  # Wait for previous audio to finish
-        sd.play(audio, samplerate=16000)
 
     def read_file(self) -> None:
         """Read the entire file, processing chunks with optional TTS."""
-        output_stream = sd.OutputStream(
-            samplerate=16000,
-            # blocksize=2048,
-            channels=1,
-            dtype="float32",
-        )
-        output_stream.start()
+        # output_stream = sd.OutputStream(
+        #     samplerate=16000,
+        #     # blocksize=2048,
+        #     channels=1,
+        #     dtype="float32",
+        # )
+        # output_stream.start()
+        prev_end = None
+        for i, (chunk, end) in enumerate(self._split_into_chunks(self.load_data()), 1):
+            if self.simplify:
+                chunk = self._simplify_text(chunk)
 
-        for i, chunk in enumerate(self.process_chunks(), 1):
             print(f"\n--- Chunk {i} ---")
             print(chunk)
             print()
 
             # Read aloud
-            self.read_aloud(chunk, output_stream)
+            audio = self._text_to_speech(chunk)
+            sd.wait()  # Wait for previous audio to finish
+            sd.play(audio, samplerate=16000)
+
+            # Update reading status on previous end
+            if prev_end is not None:
+                self.reading_status.update_position(prev_end)
+            prev_end = end
 
 
 def main() -> None:
