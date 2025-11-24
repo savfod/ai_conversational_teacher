@@ -8,8 +8,10 @@ This module provides functionality to:
 """
 
 import argparse
+import time
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator, Literal
+from typing import Callable, Iterator, Literal
 
 import numpy as np
 import sounddevice as sd
@@ -19,8 +21,86 @@ from ebooklib import ITEM_DOCUMENT, epub
 from conversa.audio.audio_parser import AudioParser
 from conversa.audio.input_stream import MicrophoneInputStream
 from conversa.features.llm_api import call_llm
-from conversa.generated.speech_api import text_to_speech
+from conversa.generated.speech_api import speech_to_text, text_to_speech
 from conversa.util.io import DEFAULT_READING_STATUS, read_json, write_json
+
+
+class CommandListener:
+    """Listens for voice commands and triggers callbacks.
+
+    This class monitors microphone input for voice commands (specifically 'start')
+    and executes callbacks when commands are detected or stop conditions are met.
+    """
+
+    def __init__(self, input_stream: MicrophoneInputStream, audio_parser: AudioParser):
+        """Initialize the command listener.
+
+        Args:
+            input_stream: Microphone input stream for capturing audio
+            audio_parser: Audio parser for detecting voice commands
+        """
+        self.input_stream = input_stream
+        self.audio_parser = audio_parser
+
+    def start_waiting_loop(
+        self,
+        stop_condition_callback: Callable[[], bool],
+        on_start_detected_callback: Callable[[], None],
+    ) -> bool:
+        """Wait for either stop condition or 'start' command detection.
+
+        This method runs a polling loop that:
+        1. Checks if stop_condition_callback returns True (e.g., playback finished)
+        2. Processes microphone input for voice commands
+        3. Calls on_start_detected_callback if 'start' command is detected
+
+        Args:
+            stop_condition_callback: Function that returns True when waiting should stop
+                                    (e.g., lambda: not sd.get_stream().active)
+            on_start_detected_callback: Function to call when 'start' command detected
+                                       (e.g., lambda: sd.stop())
+
+        Returns:
+            True if 'start' command was detected, False if stopped by stop condition
+
+        """
+        while not stop_condition_callback():
+            time.sleep(0.1)
+            print("Listening for 'start' command to pause... or stop condition met.")
+
+            # Get and process microphone input
+            chunk = self.input_stream.get_unprocessed_chunk()
+            if chunk is None or len(chunk) == 0:
+                continue
+
+            status, speech, status_changed = self.audio_parser.add_chunk(chunk)
+
+            # If 'start' command detected, trigger callback and wait for 'stop stop'
+            if status == "listening":
+                print("\n[Voice Control] Paused. Say 'stop stop' to resume...")
+                on_start_detected_callback()
+                return True
+
+        return False
+
+    def wait_for_stop_command(self) -> np.ndarray:
+        """Wait for 'stop stop' command to resume from pause.
+
+        This is a blocking method that continuously processes microphone input
+        until the AudioParser detects transition back to 'waiting' status.
+        """
+        while True:
+            time.sleep(0.1)
+            print("Waiting for 'stop stop' command to resume...")
+            chunk = self.input_stream.get_unprocessed_chunk()
+            if chunk is None or len(chunk) == 0:
+                continue
+
+            status, speech, status_changed = self.audio_parser.add_chunk(chunk)
+            if status == "waiting":
+                # 'stop stop' detected - exit pause state
+                assert speech is not None
+                return speech
 
 
 class ReadingStatus:
@@ -54,6 +134,14 @@ class ReadingStatus:
             "\nThe setting can be found in the file:"
             f"\nfile://{self.status_file}"
         )
+
+
+@dataclass
+class ChunkInfo:
+    i: int
+    text: str
+    audio: np.ndarray | None
+    end_position: int
 
 
 class FileReader:
@@ -208,50 +296,57 @@ Text to simplify:
             instructions=f"Read the text in clear {self.target_language} pronunciation, please. Use speed appropriate for language learners on {self.simplification_level} level. Be expressive and cheerful.",
         )
 
-    def _check_voice_commands(
-        self,
-        input_stream: MicrophoneInputStream,
-        audio_parser: AudioParser,
-    ) -> bool:
-        """Check for voice commands during playback.
+    def _prepare_chunk(
+        self, text_chunk: str, chunk_index: int
+    ) -> tuple[str, np.ndarray]:
+        """Prepare a chunk for playback: simplify if needed and convert to audio.
 
         Args:
-            input_stream: The microphone input stream
-            audio_parser: The audio parser for command detection
+            text_chunk: Text to prepare
+            chunk_index: Index of the current chunk being processed
 
         Returns:
-            True if "start" command detected (resume), False to continue waiting
+            Tuple of (text, audio_data)
         """
-        chunk = input_stream.get_unprocessed_chunk()
-        if chunk is None or len(chunk) == 0:
-            return False
+        print(f"\n--- Chunk {chunk_index} ---")
+        if self.simplify:
+            text_chunk = self._simplify_text(text_chunk)
+            print("--")
+            print("Translated & Simplified text:")
 
-        status, speech, status_changed = audio_parser.add_chunk(chunk)
+        print(text_chunk)
+        print()
 
-        if status == "listening":
-            # Start command detected - wait for stop to resume
-            print("\n[Voice Control] Paused. Say 'stop stop' to resume...")
-            sd.stop()
-            while True:
-                import time
+        audio = self._text_to_speech(text_chunk)
+        return text_chunk, audio
 
-                time.sleep(0.1)
-                chunk = input_stream.get_unprocessed_chunk()
-                if chunk is None or len(chunk) == 0:
-                    continue
+    def _start_play(self, audio: np.ndarray) -> None:
+        """Start playing audio chunk.
 
-                status, speech, status_changed = audio_parser.add_chunk(chunk)
-                if status == "waiting":
-                    # Stop command detected - resume playback
-                    print("[Voice Control] Resuming playback...")
-                    return True
+        Args:
+            audio: Audio data to play
+        """
+        sd.play(audio, samplerate=16000)
 
-        return False
+    def _finalize_chunk(self, position: int) -> None:
+        """Finalize chunk by updating reading status.
+
+        Args:
+            position: Text position to save
+        """
+        self.reading_status.update_position(position)
 
     def read_file(self) -> None:
-        """Read the entire file, processing chunks with optional TTS."""
-        input_stream = None
-        audio_parser = None
+        """Read the entire file, processing chunks with optional TTS.
+
+        Architecture:
+        1. Prepare next chunk (simplify + TTS)
+        2. Start playback of current chunk
+        3. Wait for playback to finish OR 'start' command (which pauses)
+        4. Finalize current chunk (save position)
+        5. Repeat
+        """
+        command_listener = None
 
         if self.enable_voice_control:
             print("Starting microphone for voice control...")
@@ -261,44 +356,108 @@ Text to simplify:
             audio_parser = AudioParser(
                 model_path="vosk-model-small-en-us-0.15", sample_rate=16000
             )
+            command_listener = CommandListener(input_stream, audio_parser)
 
         try:
-            prev_end = None
-            for i, (chunk, end) in enumerate(
-                self._split_into_chunks(self.load_data()), 1
-            ):
-                if self.simplify:
-                    chunk = self._simplify_text(chunk)
+            chunks_stream = enumerate(
+                self._split_into_chunks(self.load_data()), start=1
+            )
 
-                print(f"\n--- Chunk {i} ---")
-                print(chunk)
-                print()
+            processed_chunk_info = None
 
-                # Read aloud
-                audio = self._text_to_speech(chunk)
-                sd.wait()  # Wait for previous audio to finish
-                sd.play(audio, samplerate=16000)
+            def _get_next_chunk_info():
+                data = next(chunks_stream, None)
+                if data is not None:
+                    i, (chunk_text, end) = data
+                    return ChunkInfo(i=i, text=chunk_text, audio=None, end_position=end)
+                return None
 
-                # Monitor for voice commands during playback
-                if self.enable_voice_control and input_stream and audio_parser:
-                    import time
+            next_chunk_info = _get_next_chunk_info()
 
-                    # Check periodically while audio is playing
-                    while sd.get_stream().active:
-                        time.sleep(0.1)
-                        if self._check_voice_commands(input_stream, audio_parser):
-                            # User requested pause - stop current playback
-                            sd.stop()
-                            break
+            while processed_chunk_info or next_chunk_info:
+                # 1. Pull the next chunk from the stream
+                if next_chunk_info is None:
+                    next_chunk_info = _get_next_chunk_info()
+                    print("Next chunk generated")
 
-                # Update reading status on previous end
-                if prev_end is not None:
-                    self.reading_status.update_position(prev_end)
-                prev_end = end
+                # 2: Start playback
+                play_started = False
+                if (
+                    processed_chunk_info is not None
+                    and processed_chunk_info.audio is not None
+                ):
+                    print(f"Playing chunk {processed_chunk_info.i}...")
+                    self._start_play(processed_chunk_info.audio)
+                    play_started = True
+
+                # 3: During playback, prepare the next chunk (simplify and convert to audio)
+                if next_chunk_info is not None and next_chunk_info.audio is None:
+                    _text, audio = self._prepare_chunk(
+                        next_chunk_info.text, next_chunk_info.i
+                    )
+                    next_chunk_info = ChunkInfo(
+                        i=next_chunk_info.i,
+                        text=_text,
+                        audio=audio,
+                        end_position=next_chunk_info.end_position,
+                    )
+                    print("Next chunk prepared")
+
+                # 4: Wait for playback to finish or voice command")
+                processed_chunk_played = False
+                # breakpoint()
+                if play_started:
+                    if command_listener:
+                        print(
+                            "Voice control enabled - waiting for 'start' command or playback finish..."
+                        )
+                        start_detected = command_listener.start_waiting_loop(
+                            stop_condition_callback=lambda: not sd.get_stream().active,
+                            on_start_detected_callback=lambda: sd.stop(),
+                        )
+                        if start_detected:
+                            speech = command_listener.wait_for_stop_command()
+                            transcription = speech_to_text(
+                                speech
+                            )  # todo: language code
+                            print("Transcription of the command:", transcription)
+                            if "resume" in transcription.lower():
+                                print("[Voice Control] Resuming playback...")
+                                # we need to repeat the chunk, as it was paused mid-playback
+
+                            else:
+                                llm_response = call_llm(
+                                    query=f"""The user said the following (text to speech may have errors): "{transcription}" about.""",
+                                    sys_prompt="You are a helpful assistant.",
+                                )
+                                audio = text_to_speech(
+                                    llm_response,
+                                    instructions="Read the text in a clear and friendly tone.",
+                                )
+                                sd.play(audio, samplerate=16000)
+                                sd.wait()
+
+                    else:
+                        # No voice control - just wait for playback to finish
+                        sd.wait()
+                        processed_chunk_played = True
+
+                # Step 5: Finalize chunk (update reading position, switch to next one) or add it
+                if processed_chunk_played:
+                    assert processed_chunk_info is not None
+                    self._finalize_chunk(processed_chunk_info.end_position)
+                    processed_chunk_info, next_chunk_info = next_chunk_info, None
+
+                elif (
+                    processed_chunk_info is None
+                    and next_chunk_info is not None
+                    and next_chunk_info.audio is not None
+                ):
+                    processed_chunk_info, next_chunk_info = next_chunk_info, None
 
         finally:
-            if input_stream:
-                input_stream.stop()
+            if command_listener:
+                command_listener.input_stream.stop()
                 print("Microphone stopped.")
 
 
