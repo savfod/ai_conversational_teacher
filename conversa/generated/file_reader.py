@@ -16,6 +16,8 @@ import sounddevice as sd
 from bs4 import BeautifulSoup
 from ebooklib import ITEM_DOCUMENT, epub
 
+from conversa.audio.audio_parser import AudioParser
+from conversa.audio.input_stream import MicrophoneInputStream
 from conversa.features.llm_api import call_llm
 from conversa.generated.speech_api import text_to_speech
 from conversa.util.io import DEFAULT_READING_STATUS, read_json, write_json
@@ -64,6 +66,7 @@ class FileReader:
         simplify: bool = False,
         target_language: str = "English",
         simplification_level: Literal["A1", "A2", "B1", "B2", "C1", "C2"] = "B1",
+        enable_voice_control: bool = False,
     ):
         """Initialize the file reader.
 
@@ -73,6 +76,7 @@ class FileReader:
             simplify: Whether to simplify the text
             target_language: Target language for simplification
             simplification_level: CEFR level for simplification (A1-C2)
+            enable_voice_control: Enable voice commands for pause/resume control
         """
         self.file_path = Path(file_path)
         self.chunk_size = chunk_size
@@ -80,6 +84,7 @@ class FileReader:
         self.target_language = target_language
         self.simplification_level = simplification_level
         self.reading_status = ReadingStatus(str(self.file_path))
+        self.enable_voice_control = enable_voice_control
 
         if not self.file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
@@ -203,33 +208,98 @@ Text to simplify:
             instructions=f"Read the text in clear {self.target_language} pronunciation, please. Use speed appropriate for language learners on {self.simplification_level} level. Be expressive and cheerful.",
         )
 
+    def _check_voice_commands(
+        self,
+        input_stream: MicrophoneInputStream,
+        audio_parser: AudioParser,
+    ) -> bool:
+        """Check for voice commands during playback.
+
+        Args:
+            input_stream: The microphone input stream
+            audio_parser: The audio parser for command detection
+
+        Returns:
+            True if "start" command detected (resume), False to continue waiting
+        """
+        chunk = input_stream.get_unprocessed_chunk()
+        if chunk is None or len(chunk) == 0:
+            return False
+
+        status, speech, status_changed = audio_parser.add_chunk(chunk)
+
+        if status == "listening":
+            # Start command detected - wait for stop to resume
+            print("\n[Voice Control] Paused. Say 'stop stop' to resume...")
+            sd.stop()
+            while True:
+                import time
+
+                time.sleep(0.1)
+                chunk = input_stream.get_unprocessed_chunk()
+                if chunk is None or len(chunk) == 0:
+                    continue
+
+                status, speech, status_changed = audio_parser.add_chunk(chunk)
+                if status == "waiting":
+                    # Stop command detected - resume playback
+                    print("[Voice Control] Resuming playback...")
+                    return True
+
+        return False
+
     def read_file(self) -> None:
         """Read the entire file, processing chunks with optional TTS."""
-        # output_stream = sd.OutputStream(
-        #     samplerate=16000,
-        #     # blocksize=2048,
-        #     channels=1,
-        #     dtype="float32",
-        # )
-        # output_stream.start()
-        prev_end = None
-        for i, (chunk, end) in enumerate(self._split_into_chunks(self.load_data()), 1):
-            if self.simplify:
-                chunk = self._simplify_text(chunk)
+        input_stream = None
+        audio_parser = None
 
-            print(f"\n--- Chunk {i} ---")
-            print(chunk)
-            print()
+        if self.enable_voice_control:
+            print("Starting microphone for voice control...")
+            print("Say 'start' to pause, then 'stop stop' to resume")
+            input_stream = MicrophoneInputStream(sample_rate=16000)
+            input_stream.start()
+            audio_parser = AudioParser(
+                model_path="vosk-model-small-en-us-0.15", sample_rate=16000
+            )
 
-            # Read aloud
-            audio = self._text_to_speech(chunk)
-            sd.wait()  # Wait for previous audio to finish
-            sd.play(audio, samplerate=16000)
+        try:
+            prev_end = None
+            for i, (chunk, end) in enumerate(
+                self._split_into_chunks(self.load_data()), 1
+            ):
+                if self.simplify:
+                    chunk = self._simplify_text(chunk)
 
-            # Update reading status on previous end
-            if prev_end is not None:
-                self.reading_status.update_position(prev_end)
-            prev_end = end
+                print(f"\n--- Chunk {i} ---")
+                print(chunk)
+                print()
+
+                # Read aloud
+                audio = self._text_to_speech(chunk)
+                sd.wait()  # Wait for previous audio to finish
+                sd.play(audio, samplerate=16000)
+
+                # Monitor for voice commands during playback
+                if self.enable_voice_control and input_stream and audio_parser:
+                    import time
+
+                    # Check periodically while audio is playing
+                    while sd.get_stream().active:
+                        time.sleep(0.1)
+                        if self._check_voice_commands(input_stream, audio_parser):
+                            # User requested pause - stop current playback
+                            sd.stop()
+                            break
+
+                # Update reading status on previous end
+                if prev_end is not None:
+                    self.reading_status.update_position(prev_end)
+                prev_end = end
+
+        finally:
+            if input_stream:
+                input_stream.stop()
+                print("Microphone stopped.")
 
 
 def main() -> None:
@@ -262,6 +332,11 @@ def main() -> None:
         default="B1",
         help="CEFR level for simplification (default: B1)",
     )
+    parser.add_argument(
+        "--voice-control",
+        action="store_true",
+        help="Enable voice commands to pause/resume playback (say 'start' to pause, 'stop stop' to resume)",
+    )
 
     args = parser.parse_args()
 
@@ -271,6 +346,7 @@ def main() -> None:
         simplify=args.simplify,
         target_language=args.language,
         simplification_level=args.level,
+        enable_voice_control=args.voice_control,
     )
 
     reader.read_file()
