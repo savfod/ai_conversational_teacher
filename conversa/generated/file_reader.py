@@ -137,6 +137,10 @@ class FileReader:
         Returns:
             Simplified text
         """
+
+        print(
+            f"Simplifying text... to language {self.target_language}, level {self.simplification_level}"
+        )
         user_prompt = f"""Translate the following text if required and simplify it to the {self.simplification_level} level of language {self.target_language}.
 Keep the meaning intact but use simpler vocabulary and sentence structures appropriate for {self.simplification_level} learners. If required, use longer explanations. Very rare words could be described in English also. Include only the final simplified text in your response.
 

@@ -52,7 +52,10 @@ def check_for_errors(query: str) -> str:
     errs_answers: list[str] = []
 
     if len(errs.errors) > 0:
-        print(f'Saving {len(errs.errors)} mistakes to "{DEFAULT_MISTAKES_FILE}"')
+        print(
+            f"Saving {len(errs.errors)} mistakes to the following file:"
+            f"\nfile://{DEFAULT_MISTAKES_FILE}"
+        )
 
     for err in errs.errors:
         errs_answers.append(

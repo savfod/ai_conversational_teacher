@@ -1,4 +1,5 @@
 import argparse
+import datetime
 import time
 
 import numpy as np
@@ -9,7 +10,22 @@ from conversa.audio.input_stream import AudioFileInputStream, MicrophoneInputStr
 from conversa.features.find_errors import check_for_errors
 from conversa.generated.speech_api import speech_to_text, text_to_speech
 from conversa.scenarios.answer import teacher_answer
+from conversa.util.io import DEFAULT_CONVERSATIONS_FILE, append_to_jsonl_file
 from conversa.util.logs import setup_logging
+
+
+def _save(message: dict) -> None:
+    """Save a message to the conversations log file.
+
+    Args:
+        message: A dictionary representing the message to save.
+
+    Returns:
+        None
+    """
+    time_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    message = {"timestamp": time_str, **message}
+    append_to_jsonl_file(message, DEFAULT_CONVERSATIONS_FILE)
 
 
 def send_tone_signal(output_stream: "sd.OutputStream", signal: str) -> None:
@@ -116,7 +132,9 @@ def main(language: str, file_path: str | None = None) -> None:
             if speech is not None:
                 print(f"\nSpeech interval detected. Transcribing ({language})...")
                 transcription = speech_to_text(speech, language=language)
-                history.append({"role": "user", "content": transcription})
+                new_message = {"role": "user", "content": transcription}
+                _save(new_message)
+                history.append(new_message)
                 print(f"Transcription: {transcription}")
 
                 errs_message = check_for_errors(transcription)
@@ -130,7 +148,9 @@ def main(language: str, file_path: str | None = None) -> None:
                     )
 
                 reply = teacher_answer(transcription, history=history)
-                history.append({"role": "assistant", "content": reply})
+                new_message = {"role": "assistant", "content": reply}
+                _save(new_message)
+                history.append(new_message)
                 print(f"LLM Reply: {reply}")
 
                 # Optionally, convert text back to speech
@@ -151,6 +171,10 @@ def main(language: str, file_path: str | None = None) -> None:
         output_stream.stop()
         output_stream.close()
         print("Input stream stopped.")
+        print(
+            "Text of the conversation can be found in the following file:"
+            f"\nfile://{DEFAULT_CONVERSATIONS_FILE}"
+        )
 
 
 def parse_args() -> argparse.Namespace:
