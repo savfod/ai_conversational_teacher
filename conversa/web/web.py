@@ -1,9 +1,10 @@
 import os
 import queue
-import sys
+from io import BytesIO
 from threading import Thread
 
 import numpy as np
+import soundfile as sf
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO
 
@@ -26,7 +27,21 @@ CHUNK_SIZE = 16000 * 5  # e.g. 5 second @ 16kHz
 # -----------------------------
 #  Your audio processing logic
 # -----------------------------
-def process_audio(full_audio: np.ndarray) -> np.ndarray:
+# def process_audio(full_audio: np.ndarray) -> np.ndarray:
+#     """Process full audio chunk and return processed audio.
+#     Args:
+#         full_audio: NumPy array of shape (n,) dtype float32.
+#     Returns:
+#         Processed audio as NumPy array of shape (n,) dtype float32.
+#     """
+#     text = speech_to_text(full_audio, sample_rate=16000, language="en")
+#     print(text)
+#     answer = call_llm(text, sys_prompt="You are a helpful assistant.")
+#     print("LLM answer:", answer)
+#     return text_to_speech(answer)  # For now: identity
+
+
+def process_audio(full_audio: np.ndarray) -> np.ndarray | None:
     """Process full audio chunk and return processed audio.
     Args:
         full_audio: NumPy array of shape (n,) dtype float32.
@@ -34,9 +49,16 @@ def process_audio(full_audio: np.ndarray) -> np.ndarray:
         Processed audio as NumPy array of shape (n,) dtype float32.
     """
     text = speech_to_text(full_audio, sample_rate=16000, language="en")
-    answer = call_llm(text, sys_prompt="You are a helpful assistant.")
-    # TODO: Replace with your logic / ML model / filtering
-    return text_to_speech(answer)  # For now: identity
+    if text != "" and not text.strip().startswith(
+        "Please transcribe the following audio"
+    ):
+        print(f"processing text '{text}'")
+        answer = call_llm(text, sys_prompt="You are a helpful assistant.")
+        # TODO: Replace with your logic / ML model / filtering
+        return text_to_speech(answer)  # For now: identity
+    else:
+        print(f"skipped text '{text}'")
+        return None
 
 
 # -----------------------------
@@ -45,7 +67,7 @@ def process_audio(full_audio: np.ndarray) -> np.ndarray:
 @socketio.on("audio_in")
 def handle_audio_in(data):
     """
-    Receives raw audio bytes from browser.
+    Receives raw PCM audio bytes from browser.
     Stores (sid, bytes) in processing queue.
     """
     sid = request.sid
@@ -81,12 +103,18 @@ def audio_worker():
 
             # Run your processing
             processed = process_audio(to_process)
+            if processed is None:
+                # No response to send
+                buffers[sid] = [total[CHUNK_SIZE:]]
+                continue
 
-            # Convert back to bytes
-            out_bytes = processed.astype(np.int16).tobytes()
+            # Convert to WAV format for browser
+            buffer = BytesIO()
+            sf.write(buffer, processed, samplerate=16000, format="WAV")
+            wav_bytes = buffer.getvalue()
 
             # Send back to EXACT client (full‑duplex)
-            socketio.emit("audio_out", out_bytes, room=sid)
+            socketio.emit("audio_out", wav_bytes, to=sid)
 
             # Retain leftover samples
             buffers[sid] = [total[CHUNK_SIZE:]]
@@ -99,7 +127,7 @@ def index():
 
 if __name__ == "__main__":
     Thread(target=audio_worker, daemon=True).start()  # type: ignore
-    socketio.run(app, host="127.0.0.1", port=5555, debug=True)
+    socketio.run(app, host="127.0.0.1", port=5557, debug=True)
 
 # Set the Flask template folder to this package's directory so
 # `render_template('index.html')` will find `conversa/web/index.html`.
