@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+      const socket = io();
+
+      // ====== SEND MIC TO SERVER ======
+      async function startAudio() {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+
+        recorder.ondataavailable = async (event) => {
+          const arrayBuf = await event.data.arrayBuffer();
+          socket.emit("audio_in", arrayBuf);
+        };
+
+        recorder.start(100); // send every 100ms
+      }
+      startAudio();
+
+      // ====== PLAY AUDIO FROM SERVER ======
+      const audioCtx = new AudioContext();
+
+      socket.on("audio_out", async (arrayBuffer) => {
+        const audioBuffer = await audioCtx.decodeAudioData(
+          arrayBuffer.slice(0)
+        );
+        const source = audioCtx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioCtx.destination);
+        source.start();
+      });
+    </script>
+    <title>Conversa</title>
+  </head>
+  <body>
+    <h1>Hello from the home page!</h1>
+  </body>
+</html>
