@@ -11,7 +11,7 @@ import argparse
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterator, Literal
+from typing import Callable, Literal
 
 import numpy as np
 import sounddevice as sd
@@ -137,45 +137,47 @@ class ReadingStatus:
 
 
 @dataclass
-class ChunkInfo:
+class Chunk:
     i: int
     text: str
-    audio: np.ndarray | None
     end_position: int
+    audio: np.ndarray | None = None
 
 
-class FileReader:
-    """Reads files and processes them with optional translation and TTS."""
+class FileChunkLoader:
+    """Handles loading files and splitting text into chunks.
+
+    This class is responsible for:
+    - Loading text from files (txt, epub)
+    - Splitting text into chunks of appropriate size
+    - Breaking at sentence boundaries when possible
+    - Tracking current position in the text
+
+    It has no knowledge of simplification, TTS, reading status persistence, or other processing.
+    """
 
     def __init__(
         self,
-        file_path: str,
+        file_path: str | Path,
+        start_position: int = 0,
         chunk_size: int = 500,
-        simplify: bool = False,
-        target_language: str = "English",
-        simplification_level: Literal["A1", "A2", "B1", "B2", "C1", "C2"] = "B1",
-        enable_voice_control: bool = False,
     ):
-        """Initialize the file reader.
+        """Initialize the chunk loader.
 
         Args:
-            file_path: Path to the file to read
-            chunk_size: Number of characters per chunk
-            simplify: Whether to simplify the text
-            target_language: Target language for simplification
-            simplification_level: CEFR level for simplification (A1-C2)
-            enable_voice_control: Enable voice commands for pause/resume control
+            file_path: Path to the file to load
+            start_position: Character position to start from (default: 0)
+            chunk_size: Target number of characters per chunk (default: 500)
         """
         self.file_path = Path(file_path)
-        self.chunk_size = chunk_size
-        self.simplify = simplify
-        self.target_language = target_language
-        self.simplification_level = simplification_level
-        self.reading_status = ReadingStatus(str(self.file_path))
-        self.enable_voice_control = enable_voice_control
-
         if not self.file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
+
+        self.text = self._load_file()
+        self.chunk_size = chunk_size
+        self.current_position = start_position
+        self.text_length = len(self.text)
+        self.chunk_index = 0
 
     def _load_txt(self) -> str:
         """Load content from a text file.
@@ -203,7 +205,7 @@ class FileReader:
         full_text = "\n\n".join(all_text)
         return full_text
 
-    def load_data(self) -> str:
+    def _load_file(self) -> str:
         """Load data from the file based on its extension.
 
         Returns:
@@ -221,47 +223,77 @@ class FileReader:
         else:
             raise ValueError(f"Unsupported file format: {extension}")
 
-    def _split_into_chunks(self, text: str) -> Iterator[tuple[str, int]]:
-        """Split text into chunks of approximately chunk_size characters.
+    def has_more_chunks(self) -> bool:
+        """Check if there are more chunks to process.
 
-        Tries to break at sentence boundaries when possible.
+        Returns:
+            True if there are more chunks available
+        """
+        return self.current_position < self.text_length
+
+    def get_next_chunk(self) -> Chunk | None:
+        """Get the next chunk of text.
+
+        This method advances the internal position and returns a Chunk object.
+        It tries to break at sentence boundaries when possible.
+
+        Returns:
+            Chunk object or None if no more chunks
+        """
+        if not self.has_more_chunks():
+            return None
+
+        start = self.current_position
+        end = start + self.chunk_size
+
+        # If we're not at the end, try to find a sentence boundary
+        if end < self.text_length:
+            # Look for sentence endings in the next 100 characters
+            search_end = min(end + 100, self.text_length)
+            chunk = self.text[start:search_end]
+
+            # Find the last sentence ending
+            for separator in [". ", "! ", "? ", ".\n", "!\n", "?\n"]:
+                last_sep = chunk.rfind(separator)
+                if last_sep != -1:
+                    end = start + last_sep + len(separator)
+                    break
+
+        chunk_text = self.text[start:end].strip()
+        self.current_position = end
+        self.chunk_index += 1
+        return Chunk(i=self.chunk_index, text=chunk_text, end_position=end)
+
+
+class FileNarrator:
+    """Narrates files with optional translation and TTS."""
+
+    def __init__(
+        self,
+        file_path: str,
+        chunk_size: int = 500,
+        simplify: bool = False,
+        target_language: str = "English",
+        simplification_level: Literal["A1", "A2", "B1", "B2", "C1", "C2"] = "B1",
+        enable_voice_control: bool = False,
+    ):
+        """Initialize the file narrator.
 
         Args:
-            text: The text to split
-
-        Yields:
-            Text chunks
+            file_path: Path to the file to narrate
+            chunk_size: Number of characters per chunk
+            simplify: Whether to simplify the text
+            target_language: Target language for simplification
+            simplification_level: CEFR level for simplification (A1-C2)
+            enable_voice_control: Enable voice commands for pause/resume control
         """
-        if not text:
-            return
-
-        start = 0
-        text_length = len(text)
-        last_position = self.reading_status.get_last_position()
-        if last_position < text_length:
-            print(f"Resuming from saved position {last_position}/{text_length}")
-            self.reading_status.print_info()
-            start = last_position
-
-        while start < text_length:
-            end = start + self.chunk_size
-
-            # If we're not at the end, try to find a sentence boundary
-            if end < text_length:
-                # Look for sentence endings in the next 100 characters
-                search_end = min(end + 100, text_length)
-                chunk = text[start:search_end]
-
-                # Find the last sentence ending
-                for separator in [". ", "! ", "? ", ".\n", "!\n", "?\n"]:
-                    last_sep = chunk.rfind(separator)
-                    if last_sep != -1:
-                        end = start + last_sep + len(separator)
-                        break
-
-            yield text[start:end].strip(), end
-
-            start = end
+        self.file_path = Path(file_path)
+        self.chunk_size = chunk_size
+        self.simplify = simplify
+        self.target_language = target_language
+        self.simplification_level = simplification_level
+        self.reading_status = ReadingStatus(str(self.file_path))
+        self.enable_voice_control = enable_voice_control
 
     def _simplify_text(self, text: str) -> str:
         """Translate text if required and simplify to the specified language level.
@@ -359,25 +391,28 @@ Text to simplify:
             command_listener = CommandListener(input_stream, audio_parser)
 
         try:
-            chunks_stream = enumerate(
-                self._split_into_chunks(self.load_data()), start=1
+            # Create chunk loader
+            start_position = self.reading_status.get_last_position()
+
+            chunk_loader = FileChunkLoader(
+                file_path=self.file_path,
+                start_position=start_position,
+                chunk_size=self.chunk_size,
             )
 
+            if start_position > 0:
+                print(
+                    f"Resuming from saved position {start_position}/{chunk_loader.text_length}"
+                )
+                self.reading_status.print_info()
+
             processed_chunk_info = None
-
-            def _get_next_chunk_info():
-                data = next(chunks_stream, None)
-                if data is not None:
-                    i, (chunk_text, end) = data
-                    return ChunkInfo(i=i, text=chunk_text, audio=None, end_position=end)
-                return None
-
-            next_chunk_info = _get_next_chunk_info()
+            next_chunk_info = chunk_loader.get_next_chunk()
 
             while processed_chunk_info or next_chunk_info:
                 # 1. Pull the next chunk from the stream
                 if next_chunk_info is None:
-                    next_chunk_info = _get_next_chunk_info()
+                    next_chunk_info = chunk_loader.get_next_chunk()
                     print("Next chunk generated")
 
                 # 2: Start playback
@@ -395,7 +430,7 @@ Text to simplify:
                     _text, audio = self._prepare_chunk(
                         next_chunk_info.text, next_chunk_info.i
                     )
-                    next_chunk_info = ChunkInfo(
+                    next_chunk_info = Chunk(
                         i=next_chunk_info.i,
                         text=_text,
                         audio=audio,
@@ -461,6 +496,25 @@ Text to simplify:
                 print("Microphone stopped.")
 
 
+# """Draft next version:"""
+
+# def control_flow():
+#     chunk_generator = ...
+#     while chunk_generator.not_finished():
+#         chunk_to_play = chunk_generator.get_prepared_chunk()
+#         start_playback(chunk_to_play)
+#         waiting_obj = chunk_generator.start_preparing_next_chunk()
+
+#         _result = voice_command_listener.start(
+#             wait_condition_callback =  # play is alive or prepare next is alive
+#             on_pause_callback=pause_playback=...
+#         )
+
+#         assert wait_condition_callback() == False, "Should be here only on pause or finish from the previous"
+#         # some possible processing for _result in future version placeholder
+#         # pass
+
+
 def main() -> None:
     """Main entry point for command-line usage."""
     parser = argparse.ArgumentParser(
@@ -499,7 +553,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    reader = FileReader(
+    narrator = FileNarrator(
         file_path=args.file_path,
         chunk_size=args.chunk_size,
         simplify=args.simplify,
@@ -508,7 +562,7 @@ def main() -> None:
         enable_voice_control=args.voice_control,
     )
 
-    reader.read_file()
+    narrator.read_file()
 
 
 if __name__ == "__main__":
