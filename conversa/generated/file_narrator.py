@@ -461,8 +461,11 @@ Text to simplify:
                                 # we need to repeat the chunk, as it was paused mid-playback
 
                             else:
+                                about_text = ""
+                                if processed_chunk_info is not None:
+                                    about_text = f"\n(about the text {processed_chunk_info.text})"
                                 llm_response = call_llm(
-                                    query=f"""The user said the following (text to speech may have errors): "{transcription}" about.""",
+                                    query=f"""The user said the following (text to speech may have errors): "{transcription}" {about_text}.""",
                                     sys_prompt="You are a helpful assistant.",
                                 )
                                 audio = text_to_speech(
