@@ -1,5 +1,7 @@
+import argparse
 import os
 import queue
+import time
 from io import BytesIO
 from threading import Thread
 
@@ -41,13 +43,18 @@ CHUNK_SIZE = 16000 * 5  # e.g. 5 second @ 16kHz
 #     return text_to_speech(answer)  # For now: identity
 
 
-def process_audio(full_audio: np.ndarray) -> np.ndarray | None:
+def process_audio(full_audio: np.ndarray, debug: bool = False) -> np.ndarray | None:
     """Process full audio chunk and return processed audio.
     Args:
         full_audio: NumPy array of shape (n,) dtype float32.
+        debug: If True, prints debug information.
     Returns:
         Processed audio as NumPy array of shape (n,) dtype float32.
     """
+    if debug:
+        time.sleep(1)  # Simulate processing delay
+        return full_audio
+
     text = speech_to_text(full_audio, sample_rate=16000, language="en")
     if text != "" and not text.strip().startswith(
         "Please transcribe the following audio"
@@ -77,10 +84,13 @@ def handle_audio_in(data):
 # -----------------------------
 #        Worker Thread
 # -----------------------------
-def audio_worker():
+def audio_worker(debug: bool = False):
     """
     Continuously collects audio chunks from queue.
     Accumulates enough samples → process_audio() → send back.
+
+    Args:
+        debug: If True, prints debug information.
     """
     while True:
         sid, chunk = audio_queue.get()
@@ -102,7 +112,7 @@ def audio_worker():
             to_process = total[:CHUNK_SIZE]
 
             # Run your processing
-            processed = process_audio(to_process)
+            processed = process_audio(to_process, debug=debug)
             if processed is None:
                 # No response to send
                 buffers[sid] = [total[CHUNK_SIZE:]]
@@ -125,8 +135,15 @@ def index():
     return render_template("index.html")
 
 
+def arg_parser():
+    parser = argparse.ArgumentParser(description="Conversa Web Server")
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    Thread(target=audio_worker, daemon=True).start()  # type: ignore
+    args = arg_parser()
+    Thread(target=audio_worker, daemon=True, args=(args.debug,)).start()  # type: ignore
     socketio.run(app, host="127.0.0.1", port=5557, debug=True)
 
 # Set the Flask template folder to this package's directory so
