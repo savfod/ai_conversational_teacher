@@ -1,12 +1,17 @@
 """Tests for FileChunkLoader and ContentProcessor classes."""
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
-from conversa.generated.file_narrator import ContentProcessor, FileChunkLoader
+from conversa.generated.file_narrator import (
+    Chunk,
+    ChunkAsyncPreprocessor,
+    ContentProcessor,
+    FileChunkLoader,
+)
 
 
 def test_load_txt_file(tmp_path: Path):
@@ -335,3 +340,295 @@ class TestContentProcessorIntegration:
         assert isinstance(audio, np.ndarray)
         assert len(audio) > 0
         assert audio.dtype in [np.float32, np.float64]
+
+
+class TestChunkAsyncPreprocessor:
+    """Test ChunkAsyncPreprocessor with mocked dependencies."""
+
+    def test_initialization(self):
+        """Test ChunkAsyncPreprocessor initialization."""
+        mock_loader = MagicMock()
+        mock_processor = MagicMock()
+        mock_status = MagicMock()
+
+        preprocessor = ChunkAsyncPreprocessor(
+            chunk_loader=mock_loader,
+            content_processor=mock_processor,
+            reading_status=mock_status,
+        )
+
+        assert preprocessor._chunk_loader is mock_loader
+        assert preprocessor._content_processor is mock_processor
+        assert preprocessor._reading_status is mock_status
+        assert preprocessor._prepared_chunk is None
+        assert preprocessor._preparation_future is None
+        assert preprocessor._run_again is False
+
+    def test_iteration_with_single_chunk(self):
+        """Test iterating through a single chunk."""
+        # Setup mocks
+        mock_loader = MagicMock()
+        mock_processor = MagicMock()
+        mock_status = MagicMock()
+
+        # Mock chunk data
+        text_chunk = Chunk(i=1, text="Test text", end_position=9)
+        audio_data = np.array([0.1, 0.2, 0.3])
+
+        # Configure mock loader to return one chunk then indicate no more
+        mock_loader.has_more_chunks.side_effect = [True, False]
+        mock_loader.get_next_chunk.return_value = text_chunk
+
+        # Configure mock processor to return text and audio
+        mock_processor.prepare_chunk.return_value = ("Test text", audio_data)
+
+        preprocessor = ChunkAsyncPreprocessor(
+            chunk_loader=mock_loader,
+            content_processor=mock_processor,
+            reading_status=mock_status,
+        )
+
+        # Collect all chunks
+        chunks = []
+        for chunk in preprocessor:
+            if chunk is not None:
+                chunks.append(chunk)
+
+        # Should have received one chunk
+        assert len(chunks) == 1
+        assert chunks[0].i == 1
+        assert chunks[0].text == "Test text"
+        np.testing.assert_array_equal(chunks[0].audio, audio_data)
+        assert chunks[0].end_position == 9
+
+        # Verify reading status was updated
+        mock_status.update_position.assert_called_once_with(9)
+
+    def test_iteration_with_multiple_chunks(self):
+        """Test iterating through multiple chunks."""
+        mock_loader = MagicMock()
+        mock_processor = MagicMock()
+        mock_status = MagicMock()
+
+        # Mock multiple chunks
+        chunks_data = [
+            Chunk(i=1, text="First", end_position=5),
+            Chunk(i=2, text="Second", end_position=11),
+            Chunk(i=3, text="Third", end_position=16),
+        ]
+
+        mock_loader.has_more_chunks.side_effect = [True, True, True, False]
+        mock_loader.get_next_chunk.side_effect = chunks_data
+
+        # Mock processor returns
+        mock_processor.prepare_chunk.side_effect = [
+            ("First", np.array([0.1])),
+            ("Second", np.array([0.2])),
+            ("Third", np.array([0.3])),
+        ]
+
+        preprocessor = ChunkAsyncPreprocessor(
+            chunk_loader=mock_loader,
+            content_processor=mock_processor,
+            reading_status=mock_status,
+        )
+
+        # Collect all chunks
+        result_chunks = []
+        for chunk in preprocessor:
+            if chunk is not None:
+                result_chunks.append(chunk)
+
+        # Should have received three chunks
+        assert len(result_chunks) == 3
+        assert result_chunks[0].text == "First"
+        assert result_chunks[1].text == "Second"
+        assert result_chunks[2].text == "Third"
+
+        # Verify reading status was updated for each chunk
+        assert mock_status.update_position.call_count == 3
+        mock_status.update_position.assert_any_call(5)
+        mock_status.update_position.assert_any_call(11)
+        mock_status.update_position.assert_any_call(16)
+
+    def test_iteration_with_no_chunks(self):
+        """Test iteration when there are no chunks to process."""
+        mock_loader = MagicMock()
+        mock_processor = MagicMock()
+        mock_status = MagicMock()
+
+        # No chunks available
+        mock_loader.has_more_chunks.return_value = False
+
+        preprocessor = ChunkAsyncPreprocessor(
+            chunk_loader=mock_loader,
+            content_processor=mock_processor,
+            reading_status=mock_status,
+        )
+
+        # Should get empty iteration
+        chunks = list(preprocessor)
+        assert len(chunks) == 0
+
+        # Processor should not be called
+        mock_processor.prepare_chunk.assert_not_called()
+
+        # Status should not be updated
+        mock_status.update_position.assert_not_called()
+
+    def test_is_preparation_active(self):
+        """Test is_preparation_active method."""
+        mock_loader = MagicMock()
+        mock_processor = MagicMock()
+        mock_status = MagicMock()
+
+        preprocessor = ChunkAsyncPreprocessor(
+            chunk_loader=mock_loader,
+            content_processor=mock_processor,
+            reading_status=mock_status,
+        )
+
+        # Initially not active
+        assert preprocessor.is_preparation_active() is False
+
+        # Mock a future that's not done
+        mock_future = MagicMock()
+        mock_future.done.return_value = False
+        preprocessor._preparation_future = mock_future
+
+        assert preprocessor.is_preparation_active() is True
+
+        # Mock a future that's done
+        mock_future.done.return_value = True
+        assert preprocessor.is_preparation_active() is False
+
+    def test_command_run_again(self):
+        """Test 'run_again' command keeps the current chunk available."""
+        mock_loader = MagicMock()
+        mock_processor = MagicMock()
+        mock_status = MagicMock()
+
+        # Setup single chunk
+        text_chunk = Chunk(i=1, text="Test", end_position=4)
+        mock_loader.has_more_chunks.side_effect = [True, True, False]
+        mock_loader.get_next_chunk.return_value = text_chunk
+        mock_processor.prepare_chunk.return_value = ("Test", np.array([0.1]))
+
+        preprocessor = ChunkAsyncPreprocessor(
+            chunk_loader=mock_loader,
+            content_processor=mock_processor,
+            reading_status=mock_status,
+        )
+
+        # Get first chunk
+        iterator = iter(preprocessor)
+        chunk1 = next(iterator)
+        assert chunk1 is None
+        chunk2 = next(iterator)
+        assert chunk2 is not None
+        assert chunk2.text == "Test"
+
+        # Issue run_again command
+        preprocessor.command("run_again")
+
+        # Next iteration should return the same chunk
+        chunk3 = next(iterator)
+        assert chunk3 is not None
+        assert chunk3.text == "Test"
+        assert chunk3 is chunk2  # Should be the same object
+
+        # Reading status should only be updated once (after third next())
+        # because run_again prevents finalization on previous call
+        # and initial call is just none
+        chunk4 = next(iterator)
+        assert chunk4 is not None
+        assert mock_status.update_position.call_count == 1
+
+    def test_command_none_does_nothing(self):
+        """Test that None command does nothing."""
+        mock_loader = MagicMock()
+        mock_processor = MagicMock()
+        mock_status = MagicMock()
+
+        preprocessor = ChunkAsyncPreprocessor(
+            chunk_loader=mock_loader,
+            content_processor=mock_processor,
+            reading_status=mock_status,
+        )
+
+        # Should not raise any error
+        preprocessor.command(None)
+        assert preprocessor._run_again is False
+
+    def test_command_unknown_raises_error(self):
+        """Test that unknown command raises RuntimeError."""
+        mock_loader = MagicMock()
+        mock_processor = MagicMock()
+        mock_status = MagicMock()
+
+        preprocessor = ChunkAsyncPreprocessor(
+            chunk_loader=mock_loader,
+            content_processor=mock_processor,
+            reading_status=mock_status,
+        )
+
+        with pytest.raises(RuntimeError, match="Unknown command"):
+            preprocessor.command("invalid_command")
+
+    def test_background_processing_error_handling(self):
+        """Test that errors in background processing are handled gracefully."""
+        mock_loader = MagicMock()
+        mock_processor = MagicMock()
+        mock_status = MagicMock()
+
+        # Setup chunk
+        text_chunk = Chunk(i=1, text="Test", end_position=4)
+        mock_loader.has_more_chunks.side_effect = [True, False]
+        mock_loader.get_next_chunk.return_value = text_chunk
+
+        # Make processor raise an exception
+        mock_processor.prepare_chunk.side_effect = RuntimeError("Processing failed")
+
+        preprocessor = ChunkAsyncPreprocessor(
+            chunk_loader=mock_loader,
+            content_processor=mock_processor,
+            reading_status=mock_status,
+        )
+
+        # Should handle error and return no chunks
+        chunks = list(preprocessor)
+        assert chunks == [None]
+
+        # Status should not be updated
+        mock_status.update_position.assert_not_called()
+
+    def test_finished_method(self):
+        """Test _finished method correctly identifies when iteration is complete."""
+        mock_loader = MagicMock()
+        mock_processor = MagicMock()
+        mock_status = MagicMock()
+
+        preprocessor = ChunkAsyncPreprocessor(
+            chunk_loader=mock_loader,
+            content_processor=mock_processor,
+            reading_status=mock_status,
+        )
+
+        # Initially finished (no chunks, no future, no prepared chunk)
+        mock_loader.has_more_chunks.return_value = False
+        assert preprocessor._finished() is True
+
+        # Not finished if there's a prepared chunk
+        preprocessor._prepared_chunk = Chunk(i=1, text="Test", end_position=4)
+        assert preprocessor._finished() is False
+
+        # Not finished if there's a future
+        preprocessor._prepared_chunk = None
+        mock_future = MagicMock()
+        preprocessor._preparation_future = mock_future
+        assert preprocessor._finished() is False
+
+        # Not finished if loader has more chunks
+        preprocessor._preparation_future = None
+        mock_loader.has_more_chunks.return_value = True
+        assert preprocessor._finished() is False
