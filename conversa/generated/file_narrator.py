@@ -265,6 +265,97 @@ class FileChunkLoader:
         return Chunk(i=self.chunk_index, text=chunk_text, end_position=end)
 
 
+class ContentProcessor:
+    """Manages text processing pipeline: simplification, translation, and TTS.
+
+    This class is responsible for:
+    - Simplifying text to target language level
+    - Translating text if needed
+    - Converting text to speech
+    - Preparing chunks with all processing steps combined
+    """
+
+    def __init__(
+        self,
+        simplify: bool = False,
+        target_language: str = "English",
+        simplification_level: Literal["A1", "A2", "B1", "B2", "C1", "C2"] = "B1",
+    ):
+        """Initialize the content processor.
+
+        Args:
+            simplify: Whether to simplify the text
+            target_language: Target language for simplification
+            simplification_level: CEFR level for simplification (A1-C2)
+        """
+        self.simplify = simplify
+        self.target_language = target_language
+        self.simplification_level = simplification_level
+
+    def _simplify_text(self, text: str) -> str:
+        """Translate text if required and simplify to the specified language level.
+
+        Args:
+            text: The text to simplify
+
+        Returns:
+            Simplified text
+        """
+        print(
+            f"Simplifying text... to language {self.target_language}, level {self.simplification_level}"
+        )
+        user_prompt = f"""Translate the following text if required and simplify it to the {self.simplification_level} level of language {self.target_language}.
+Keep the meaning intact but use simpler vocabulary and sentence structures appropriate for {self.simplification_level} learners. If required, use longer explanations. Very rare words could be described in English also. Include only the final simplified text in your response.
+
+Text to simplify:
+{text}"""
+
+        sys_prompt = "You are a language teaching assistant that simplifies texts for language learners."
+
+        print("Original text to simplify:")
+        print(text)
+        simplified = call_llm(query=user_prompt, sys_prompt=sys_prompt)
+        return simplified.strip()
+
+    def _text_to_speech(self, text: str) -> np.ndarray:
+        """Convert text chunk to speech audio.
+
+        Args:
+            text: The text to convert to speech
+
+        Returns:
+            Audio data as numpy array
+        """
+        return text_to_speech(
+            text,
+            instructions=f"Read the text in clear {self.target_language} pronunciation, please. Use speed appropriate for language learners on {self.simplification_level} level. Be expressive and cheerful.",
+        )
+
+    def prepare_chunk(
+        self, text_chunk: str, chunk_index: int
+    ) -> tuple[str, np.ndarray]:
+        """Prepare a chunk for playback: simplify if needed and convert to audio.
+
+        Args:
+            text_chunk: Text to prepare
+            chunk_index: Index of the current chunk being processed
+
+        Returns:
+            Tuple of (processed_text, audio_data)
+        """
+        print(f"\n--- Chunk {chunk_index} ---")
+        if self.simplify:
+            text_chunk = self._simplify_text(text_chunk)
+            print("--")
+            print("Translated & Simplified text:")
+
+        print(text_chunk)
+        print()
+
+        audio = self._text_to_speech(text_chunk)
+        return text_chunk, audio
+
+
 class FileNarrator:
     """Narrates files with optional translation and TTS."""
 
@@ -289,68 +380,13 @@ class FileNarrator:
         """
         self.file_path = Path(file_path)
         self.chunk_size = chunk_size
-        self.simplify = simplify
-        self.target_language = target_language
-        self.simplification_level = simplification_level
         self.reading_status = ReadingStatus(str(self.file_path))
         self.enable_voice_control = enable_voice_control
-
-    def _simplify_text(self, text: str) -> str:
-        """Translate text if required and simplify to the specified language level.
-
-        Args:
-            text: The text to simplify
-
-        Returns:
-            Simplified text
-        """
-
-        print(
-            f"Simplifying text... to language {self.target_language}, level {self.simplification_level}"
+        self.content_processor = ContentProcessor(
+            simplify=simplify,
+            target_language=target_language,
+            simplification_level=simplification_level,
         )
-        user_prompt = f"""Translate the following text if required and simplify it to the {self.simplification_level} level of language {self.target_language}.
-Keep the meaning intact but use simpler vocabulary and sentence structures appropriate for {self.simplification_level} learners. If required, use longer explanations. Very rare words could be described in English also. Include only the final simplified text in your response.
-
-Text to simplify:
-{text}"""
-
-        sys_prompt = "You are a language teaching assistant that simplifies texts for language learners."
-
-        print("Original text to simplify:")
-        print(text)
-        simplified = call_llm(query=user_prompt, sys_prompt=sys_prompt)
-        return simplified.strip()
-
-    def _text_to_speech(self, chunk: str) -> np.ndarray:
-        """Convert text chunk to speech audio."""
-        return text_to_speech(
-            chunk,
-            instructions=f"Read the text in clear {self.target_language} pronunciation, please. Use speed appropriate for language learners on {self.simplification_level} level. Be expressive and cheerful.",
-        )
-
-    def _prepare_chunk(
-        self, text_chunk: str, chunk_index: int
-    ) -> tuple[str, np.ndarray]:
-        """Prepare a chunk for playback: simplify if needed and convert to audio.
-
-        Args:
-            text_chunk: Text to prepare
-            chunk_index: Index of the current chunk being processed
-
-        Returns:
-            Tuple of (text, audio_data)
-        """
-        print(f"\n--- Chunk {chunk_index} ---")
-        if self.simplify:
-            text_chunk = self._simplify_text(text_chunk)
-            print("--")
-            print("Translated & Simplified text:")
-
-        print(text_chunk)
-        print()
-
-        audio = self._text_to_speech(text_chunk)
-        return text_chunk, audio
 
     def _start_play(self, audio: np.ndarray) -> None:
         """Start playing audio chunk.
@@ -427,7 +463,7 @@ Text to simplify:
 
                 # 3: During playback, prepare the next chunk (simplify and convert to audio)
                 if next_chunk_info is not None and next_chunk_info.audio is None:
-                    _text, audio = self._prepare_chunk(
+                    _text, audio = self.content_processor.prepare_chunk(
                         next_chunk_info.text, next_chunk_info.i
                     )
                     next_chunk_info = Chunk(
