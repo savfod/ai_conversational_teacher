@@ -132,7 +132,7 @@ class AudioParser:
             audio_chunk = audio_chunk[:, 0]
 
         int16_chunk = (np.clip(audio_chunk, -1.0, 1.0) * 32767).astype(np.int16)
-        return int16_chunk.tobytes()
+        return int16_chunk.astype("<i2", copy=False).tobytes()  # little-endian
 
     def _add_vosk_chunk(self, audio_chunk: np.ndarray) -> str:
         """Process a new audio chunk through Vosk and return recognized text.
@@ -146,7 +146,7 @@ class AudioParser:
             starting with a space; full results are returned as the text.
         """
         # vosk processes new chunk, saving partial results, and removing buffer with saving full results
-        # todo: switch to manual logic with recognize(), not add_chunk()
+        # todo: switch to manual logic with recognize(), current logic adds it on the vosk side
         audio_data = self._preprocess_vosk_chunk(audio_chunk)
 
         if self.recognizer.AcceptWaveform(audio_data):
