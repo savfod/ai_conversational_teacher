@@ -146,6 +146,7 @@ class TestAbstractAudioInputStream:
 
         stream.stop()
 
+    @pytest.mark.slow
     def test_processing_loop_runs_until_stopped(self):
         """Test that processing loop respects the _is_running flag."""
         stream = ConcreteAudioInputStream(test_duration=10.0)  # Long duration
@@ -172,6 +173,7 @@ class TestAbstractAudioInputStream:
 
         stream.stop()
 
+    @pytest.mark.slow
     def test_complete_workflow(self):
         """Test complete workflow: start, process, retrieve chunks, stop."""
         stream = ConcreteAudioInputStream(test_duration=0.5)
