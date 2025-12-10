@@ -76,6 +76,7 @@ class TestIntegration:
             assert loaded_sr == 16000
             assert len(loaded_audio) == 24000  # 3 chunks of 8000 samples
 
+    @pytest.mark.slow
     @patch("conversa.generated.output_stream.speaker.sd.OutputStream")
     def test_speaker_stream_complete_workflow(self, mock_output_stream):
         """Test complete workflow for speaker output stream."""
@@ -213,6 +214,7 @@ class TestIntegration:
                 assert loaded_sr == sr
                 assert len(loaded_audio) == sr
 
+    @pytest.mark.slow
     @patch("conversa.generated.output_stream.speaker.sd.OutputStream")
     def test_speaker_stream_handles_different_sample_rates(self, mock_output_stream):
         """Test speaker stream with various sample rates."""

@@ -9,6 +9,7 @@ import time
 from unittest.mock import patch
 
 import numpy as np
+import pytest
 
 from conversa.audio.input_stream import (
     AbstractAudioInputStream,
@@ -76,6 +77,7 @@ class TestBackwardCompatibility:
 class TestIntegration:
     """Integration tests for the complete input_stream system."""
 
+    @pytest.mark.slow
     @patch("conversa.audio.input_stream.file.read_audio")
     def test_file_stream_to_buffer_flow(self, mock_read_audio):
         """Test complete flow from file to buffer retrieval."""
@@ -141,6 +143,7 @@ class TestIntegration:
         assert chunk is not None
         assert len(chunk) == 1600
 
+    @pytest.mark.slow
     @patch("conversa.audio.input_stream.file.read_audio")
     def test_multiple_streams_independent(self, mock_read_audio):
         """Test that multiple streams operate independently."""

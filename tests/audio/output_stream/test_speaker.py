@@ -71,6 +71,7 @@ class TestSpeakerOutputStream:
 
         stream.stop()
 
+    @pytest.mark.slow
     @patch("conversa.generated.output_stream.speaker.sd.OutputStream")
     def test_play_multiple_chunks(self, mock_output_stream):
         """Test playing multiple audio chunks."""
@@ -110,6 +111,7 @@ class TestSpeakerOutputStream:
         assert mock_stream_instance.close.called
         assert not stream._started
 
+    @pytest.mark.slow
     @patch("conversa.generated.output_stream.speaker.sd.OutputStream")
     def test_wait(self, mock_output_stream):
         """Test waiting for playback to finish."""
@@ -207,6 +209,7 @@ class TestSpeakerOutputStream:
         # Queue should be cleared
         assert stream._playback_queue.empty()
 
+    @pytest.mark.slow
     @patch("conversa.generated.output_stream.speaker.sd.OutputStream")
     def test_exception_handling_in_playback_loop(self, mock_output_stream, capsys):
         """Test that exceptions in playback loop are handled gracefully."""

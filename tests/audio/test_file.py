@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
+import pytest
 
 from conversa.audio.input_stream.file import AudioFileInputStream
 
@@ -35,6 +36,7 @@ class TestAudioFileInputStream:
         assert stream.chunk_duration == 0.5
         assert stream.chunk_size == 4000  # 8000 * 0.5
 
+    @pytest.mark.slow
     @patch("conversa.audio.input_stream.file.read_audio")
     def test_processing_loop(self, mock_read_audio):
         """Test audio processing loop with mocked file reading."""
@@ -55,6 +57,7 @@ class TestAudioFileInputStream:
 
         stream.stop()
 
+    @pytest.mark.slow
     @patch("conversa.audio.input_stream.file.read_audio")
     def test_complete_file_processing(self, mock_read_audio):
         """Test that entire file is processed correctly."""
@@ -89,6 +92,7 @@ class TestAudioFileInputStream:
         total_samples = sum(len(chunk) for chunk in all_chunks)
         assert total_samples > 0
 
+    @pytest.mark.slow
     @patch("conversa.audio.input_stream.file.read_audio")
     def test_chunk_timing(self, mock_read_audio):
         """Test that chunks are generated with correct timing."""
@@ -146,6 +150,7 @@ class TestAudioFileInputStream:
         captured = capsys.readouterr()
         assert "Error in MP3 processing:" in captured.out
 
+    @pytest.mark.slow
     @patch("conversa.audio.input_stream.file.read_audio")
     def test_early_stop(self, mock_read_audio):
         """Test stopping stream before file processing completes."""
@@ -163,6 +168,7 @@ class TestAudioFileInputStream:
 
         assert stream._is_running is False
 
+    @pytest.mark.slow
     @patch("conversa.audio.input_stream.file.read_audio")
     def test_buffer_duration_updates(self, mock_read_audio):
         """Test that buffer duration updates as chunks are added."""
@@ -186,6 +192,7 @@ class TestAudioFileInputStream:
         assert duration1 >= 0
         assert duration2 >= 0
 
+    @pytest.mark.slow
     @patch("conversa.audio.input_stream.file.read_audio")
     def test_get_unprocessed_chunk_empties_buffer(self, mock_read_audio):
         """Test that get_unprocessed_chunk empties the buffer."""
@@ -207,6 +214,7 @@ class TestAudioFileInputStream:
 
         stream.stop()
 
+    @pytest.mark.slow
     @patch("conversa.audio.input_stream.file.read_audio")
     def test_processing_loop_completion_message(self, mock_read_audio, capsys):
         """Test that completion message is printed when file finishes."""
