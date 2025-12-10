@@ -1,46 +1,15 @@
 import argparse
-import os
-import queue
 import time
-from io import BytesIO
 from threading import Thread
 
 import numpy as np
-import soundfile as sf
-from flask import Flask, render_template, request
-from flask_socketio import SocketIO
 
 from conversa.features.llm_api import call_llm
 from conversa.generated.speech_api import speech_to_text, text_to_speech
+from conversa.web import server
+from conversa.web.io import WebInputStream, WebOutputStream
 
-app = Flask(__name__, template_folder=os.path.dirname(__file__))
-socketio = SocketIO(app, cors_allowed_origins="*")
-
-# Queue of (sid, audio_bytes)
-audio_queue = queue.Queue()
-
-# Accumulation buffer PER CLIENT
-buffers = {}  # sid -> list of pcm chunks
-
-SAMPLE_WIDTH = 2  # int16
 CHUNK_SIZE = 16000 * 5  # e.g. 5 second @ 16kHz
-
-
-# -----------------------------
-#  Your audio processing logic
-# -----------------------------
-# def process_audio(full_audio: np.ndarray) -> np.ndarray:
-#     """Process full audio chunk and return processed audio.
-#     Args:
-#         full_audio: NumPy array of shape (n,) dtype float32.
-#     Returns:
-#         Processed audio as NumPy array of shape (n,) dtype float32.
-#     """
-#     text = speech_to_text(full_audio, sample_rate=16000, language="en")
-#     print(text)
-#     answer = call_llm(text, sys_prompt="You are a helpful assistant.")
-#     print("LLM answer:", answer)
-#     return text_to_speech(answer)  # For now: identity
 
 
 def process_audio(full_audio: np.ndarray, debug: bool = False) -> np.ndarray | None:
@@ -68,71 +37,53 @@ def process_audio(full_audio: np.ndarray, debug: bool = False) -> np.ndarray | N
         return None
 
 
-# -----------------------------
-#     WebSocket Handlers
-# -----------------------------
-@socketio.on("audio_in")
-def handle_audio_in(data):
-    """
-    Receives raw PCM audio bytes from browser.
-    Stores (sid, bytes) in processing queue.
-    """
-    sid = request.sid
-    audio_queue.put((sid, data))
-
-
-# -----------------------------
-#        Worker Thread
-# -----------------------------
 def audio_worker(debug: bool = False):
     """
-    Continuously collects audio chunks from queue.
-    Accumulates enough samples → process_audio() → send back.
+    Continuously collects audio chunks from WebInputStream.
+    Accumulates enough samples → process_audio() → send back using WebOutputStream.
 
     Args:
         debug: If True, prints debug information.
     """
-    while True:
-        sid, chunk = audio_queue.get()
+    # Initialize streams
+    input_stream = WebInputStream(sample_rate=16000, channels=1)
+    output_stream = WebOutputStream(sample_rate=16000, channels=1)
 
-        # Convert raw bytes to PCM16 NumPy
-        pcm = np.frombuffer(chunk, dtype=np.int16)
+    input_stream.start()
+    # Output stream doesn't need start() strictly but it's good practice if it did
+    # output_stream.start()
 
-        # Per-client buffer
-        if sid not in buffers:
-            buffers[sid] = []
+    print("Streams started. Waiting for audio...")
 
-        buffers[sid].append(pcm)
+    buffer = np.array([], dtype=np.float32)
 
-        # Total accumulated samples
-        total = np.concatenate(buffers[sid])
+    try:
+        while True:
+            # Get new data
+            chunk = input_stream.get_unprocessed_chunk()
+            if chunk is not None:
+                buffer = np.concatenate((buffer, chunk))
 
-        # Process only when enough audio accumulated
-        if len(total) >= CHUNK_SIZE:
-            to_process = total[:CHUNK_SIZE]
+            # Process if enough data
+            if len(buffer) >= CHUNK_SIZE:
+                to_process = buffer[:CHUNK_SIZE]
+                buffer = buffer[CHUNK_SIZE:]  # Keep remainder
 
-            # Run your processing
-            processed = process_audio(to_process, debug=debug)
-            if processed is None:
-                # No response to send
-                buffers[sid] = [total[CHUNK_SIZE:]]
-                continue
+                # Run your processing
+                processed = process_audio(to_process, debug=debug)
 
-            # Convert to WAV format for browser
-            buffer = BytesIO()
-            sf.write(buffer, processed, samplerate=16000, format="WAV")
-            wav_bytes = buffer.getvalue()
+                if processed is not None:
+                    # Send back
+                    output_stream.play_chunk(processed)
 
-            # Send back to EXACT client (full‑duplex)
-            socketio.emit("audio_out", wav_bytes, to=sid)
+            # Small sleep to avoid busy loop if no data
+            time.sleep(0.01)
 
-            # Retain leftover samples
-            buffers[sid] = [total[CHUNK_SIZE:]]
-
-
-@app.route("/")
-def index():
-    return render_template("index.html")
+    except KeyboardInterrupt:
+        pass
+    finally:
+        input_stream.stop()
+        output_stream.stop()
 
 
 def arg_parser():
@@ -143,8 +94,10 @@ def arg_parser():
 
 if __name__ == "__main__":
     args = arg_parser()
-    Thread(target=audio_worker, daemon=True, args=(args.debug,)).start()  # type: ignore
-    socketio.run(app, host="127.0.0.1", port=5557, debug=True)
 
-# Set the Flask template folder to this package's directory so
-# `render_template('index.html')` will find `conversa/web/index.html`.
+    # Start the worker logic in a separate thread
+    Thread(target=audio_worker, daemon=True, args=(args.debug,)).start()
+
+    # Run the server
+    # Note: We run this in the main thread as it blocks
+    server.run_server(host="127.0.0.1", port=5557, debug=True)
