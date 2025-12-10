@@ -8,7 +8,7 @@ and that the public API is properly exposed.
 import tempfile
 import time
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -76,13 +76,12 @@ class TestIntegration:
             assert loaded_sr == 16000
             assert len(loaded_audio) == 24000  # 3 chunks of 8000 samples
 
-    @patch("conversa.generated.output_stream.speaker.sd.play")
-    @patch("conversa.generated.output_stream.speaker.sd.wait")
-    @patch("conversa.generated.output_stream.speaker.sd.stop")
-    def test_speaker_stream_complete_workflow(
-        self, mock_sd_stop, mock_sd_wait, mock_sd_play
-    ):
+    @patch("conversa.generated.output_stream.speaker.sd.OutputStream")
+    def test_speaker_stream_complete_workflow(self, mock_output_stream):
         """Test complete workflow for speaker output stream."""
+        mock_stream_instance = MagicMock()
+        mock_output_stream.return_value = mock_stream_instance
+
         stream = SpeakerOutputStream(sample_rate=16000, channels=1)
 
         # Play some chunks
@@ -94,12 +93,13 @@ class TestIntegration:
         time.sleep(0.3)
         stream.wait()
 
-        # Verify play was called
-        assert mock_sd_play.call_count >= 1
+        # Verify write was called
+        assert mock_stream_instance.write.call_count >= 3
 
         # Stop stream
         stream.stop()
-        assert mock_sd_stop.call_count >= 1
+        assert mock_stream_instance.stop.called
+        assert mock_stream_instance.close.called
 
     def test_polymorphism(self):
         """Test that streams can be used polymorphically."""
@@ -143,13 +143,12 @@ class TestIntegration:
             assert np.allclose(loaded1, 0.1, rtol=1e-3, atol=1e-3)
             assert np.allclose(loaded2, 0.2, rtol=1e-3, atol=1e-3)
 
-    @patch("conversa.generated.output_stream.speaker.sd.play")
-    @patch("conversa.generated.output_stream.speaker.sd.wait")
-    @patch("conversa.generated.output_stream.speaker.sd.stop")
-    def test_mixed_stream_types_independent(
-        self, mock_sd_stop, mock_sd_wait, mock_sd_play
-    ):
+    @patch("conversa.generated.output_stream.speaker.sd.OutputStream")
+    def test_mixed_stream_types_independent(self, mock_output_stream):
         """Test that different stream types work independently."""
+        mock_stream_instance = MagicMock()
+        mock_output_stream.return_value = mock_stream_instance
+
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "test.wav"
 
@@ -172,7 +171,7 @@ class TestIntegration:
             assert output_path.exists()
 
             # Verify speaker played audio
-            assert mock_sd_play.call_count >= 1
+            assert mock_stream_instance.write.call_count >= 1
 
     def test_api_consistency_across_implementations(self):
         """Test that all implementations have consistent API."""
@@ -214,16 +213,15 @@ class TestIntegration:
                 assert loaded_sr == sr
                 assert len(loaded_audio) == sr
 
-    @patch("conversa.generated.output_stream.speaker.sd.play")
-    @patch("conversa.generated.output_stream.speaker.sd.wait")
-    @patch("conversa.generated.output_stream.speaker.sd.stop")
-    def test_speaker_stream_handles_different_sample_rates(
-        self, mock_sd_stop, mock_sd_wait, mock_sd_play
-    ):
+    @patch("conversa.generated.output_stream.speaker.sd.OutputStream")
+    def test_speaker_stream_handles_different_sample_rates(self, mock_output_stream):
         """Test speaker stream with various sample rates."""
         sample_rates = [8000, 16000, 44100]
 
         for sr in sample_rates:
+            mock_stream_instance = MagicMock()
+            mock_output_stream.return_value = mock_stream_instance
+
             stream = SpeakerOutputStream(sample_rate=sr)
             audio_data = np.random.randn(sr).astype(np.float32)
 
@@ -231,10 +229,10 @@ class TestIntegration:
             time.sleep(0.1)
             stream.stop()
 
-            # Verify play was called with correct sample rate
-            mock_sd_play.assert_called()
-            call_args = mock_sd_play.call_args
+            # Verify OutputStream was created with correct sample rate
+            mock_output_stream.assert_called()
+            call_args = mock_output_stream.call_args
             assert call_args[1]["samplerate"] == sr
 
             # Reset mock for next iteration
-            mock_sd_play.reset_mock()
+            mock_output_stream.reset_mock()
