@@ -18,6 +18,7 @@ class SpeakerOutputStream(AbstractAudioOutputStream):
     def __init__(
         self,
         sample_rate: int = 16000,
+        blocksize_sec: float = 0.5,
         channels: int = 1,
         device: Optional[int] = None,
     ):
@@ -31,36 +32,49 @@ class SpeakerOutputStream(AbstractAudioOutputStream):
         """
         super().__init__(sample_rate, channels)
         self.device = device
+        self.blocksize = int(sample_rate * blocksize_sec)
         self._playback_queue: queue.Queue = queue.Queue()
         self._playback_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
         self._started = False
+        self._output_stream: Optional[sd.OutputStream] = None
 
     def _playback_loop(self) -> None:
         """Playback loop that processes audio chunks from the queue."""
-        while not self._stop_event.is_set():
-            try:
-                # Wait for audio chunk with timeout to check stop event
-                audio_chunk = self._playback_queue.get(timeout=0.1)
+        # Create the output stream
+        self._output_stream = sd.OutputStream(
+            samplerate=self.sample_rate,
+            channels=self.channels,
+            device=self.device,
+            blocksize=self.blocksize,
+        )
+        self._output_stream.start()
 
-                if audio_chunk is None:  # Sentinel value to stop
-                    break
+        try:
+            while not self._stop_event.is_set():
+                try:
+                    # Wait for audio chunk with timeout to check stop event
+                    audio_chunk = self._playback_queue.get(timeout=0.01)
 
-                # Play audio using sd.play()
-                sd.play(
-                    audio_chunk,
-                    samplerate=self.sample_rate,
-                    device=self.device,
-                )
-                sd.wait()  # Wait for playback to finish
+                    if audio_chunk is None:  # Sentinel value to stop
+                        break
 
-                self._playback_queue.task_done()
+                    # Write audio to output stream
+                    self._output_stream.write(audio_chunk)
 
-            except queue.Empty:
-                continue
-            except Exception as e:
-                print(f"Error in playback loop: {e}")
-                self._playback_queue.task_done()
+                    self._playback_queue.task_done()
+
+                except queue.Empty:
+                    continue
+                except Exception as e:
+                    print(f"Error in playback loop: {e}")
+                    self._playback_queue.task_done()
+        finally:
+            # Clean up the output stream
+            if self._output_stream:
+                self._output_stream.stop()
+                self._output_stream.close()
+                self._output_stream = None
 
     def play_chunk(self, audio_data: np.ndarray) -> None:
         """Play audio chunk without blocking.
@@ -106,23 +120,23 @@ class SpeakerOutputStream(AbstractAudioOutputStream):
         if not self._started:
             return
 
-        # Stop current playback
-        sd.stop()
-
         # Signal thread to stop
         self._stop_event.set()
 
-        # Clear the queue
+        # Put sentinel value to unblock the queue
+        self._playback_queue.put(None)
+
+        # Wait for thread to finish
+        if self._playback_thread and self._playback_thread.is_alive():
+            self._playback_thread.join(timeout=1.0)
+
+        # Clear any remaining items in the queue
         while not self._playback_queue.empty():
             try:
                 self._playback_queue.get_nowait()
                 self._playback_queue.task_done()
             except queue.Empty:
                 break
-
-        # Wait for thread to finish
-        if self._playback_thread and self._playback_thread.is_alive():
-            self._playback_thread.join(timeout=1.0)
 
         self._started = False
         print("Speaker stream stopped")
