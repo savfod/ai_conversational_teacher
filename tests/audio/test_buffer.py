@@ -75,7 +75,6 @@ class TestAudioBuffer:
         assert isinstance(result, np.ndarray)
         assert len(result) == 0
 
-    @pytest.mark.skip("BROKEN. TODO: check")
     def test_buffer_trimming(self):
         """Test automatic buffer trimming when exceeding max size."""
         buffer = AudioBuffer(max_duration_seconds=1.0, sample_rate=16000)
@@ -85,7 +84,7 @@ class TestAudioBuffer:
         for _ in range(5):  # Total 2.5 seconds, exceeds 1.0 second limit
             buffer.add_audio(np.random.randn(chunk_size).astype(np.float32))
 
-        # Buffer should have been trimmed
+        # Buffer should have been trimmed to max_duration_seconds
         duration = buffer.get_duration()
         assert duration < 2.5  # Should be less than total added
         assert duration <= buffer.max_duration_seconds

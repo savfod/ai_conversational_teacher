@@ -38,11 +38,12 @@ class AudioBuffer:
 
             # Trim buffer if it exceeds maximum size
             if len(self._buffer) > self.max_samples:
-                trim_amount = int(len(self._buffer) * 0.2)  # Remove 20%
-                self._buffer = self._buffer[trim_amount:]
+                # Trim to max_samples to enforce the limit
+                excess = len(self._buffer) - self.max_samples
+                self._buffer = self._buffer[excess:]
                 print(
-                    f"Warning: Audio buffer trimmed by {trim_amount} samples "
-                    f"({trim_amount / self.sample_rate:.2f} seconds)"
+                    f"Warning: Audio buffer trimmed by {excess} samples "
+                    f"({excess / self.sample_rate:.2f} seconds)"
                 )
 
     def get_and_clear(self) -> np.ndarray:
