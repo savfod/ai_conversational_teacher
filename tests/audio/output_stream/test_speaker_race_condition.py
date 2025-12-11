@@ -29,23 +29,27 @@ def test_speaker_race_condition():
         speaker.play_chunk(data)
 
         # Verify started
-        assert speaker._playback_thread.is_alive()
+        # In new implementation, play_chunk returns immediately.
+        # We can check internal state or is_playing
+        assert speaker.is_playing()
 
         print("--- Stopping Stream ---")
         # Stop
         speaker.stop()
 
-        assert not speaker._playback_thread.is_alive()
+        assert not speaker.is_playing()
         print("Stream stopped successfully.")
 
         print("--- Restarting Stream ---")
         # Restart immediately
         speaker.play_chunk(data)
 
-        assert speaker._playback_thread.is_alive()
+        # wait slightly for processing if needed, though is_playing checks queue immediately
+        assert speaker.is_playing()
         print("Stream restarted successfully.")
 
         speaker.stop()
+        assert not speaker.is_playing()
 
 
 if __name__ == "__main__":
