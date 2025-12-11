@@ -137,7 +137,7 @@ def main(
                 errs_message = check_for_errors(transcription, time_str=time_id)
                 if errs_message:
                     print(f"Errors found:\n{errs_message}")
-                    output_stream.write(
+                    output_stream.play_chunk(
                         text_to_speech(
                             errs_message,
                             instructions="Speak in a strict and instructive teacher tone.",
@@ -167,7 +167,8 @@ def main(
     finally:
         input_stream.stop()
         output_stream.stop()
-        output_stream.close()
+        # output_stream.close()
+        # todo: add close method to AbstractAudioOutputStream
         print("Input stream stopped.")
         print(
             "Text of the conversation can be found in the following file:"
