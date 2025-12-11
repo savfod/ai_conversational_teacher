@@ -171,7 +171,7 @@ class CommandListener:
                 # Handle LLM interaction
                 about_text = f"\n(about the text {context_text})"
                 llm_response = call_llm(
-                    query=f"""The user said the following (text to speech may have errors): "{transcription}" {about_text}.""",
+                    query=f"""The user asked the following (text to speech may have errors): "{transcription}" {about_text}.""",
                     sys_prompt="You are a helpful assistant.",
                 )
                 audio = text_to_speech(
@@ -608,8 +608,6 @@ class FileNarrator:
         )
         self.input_stream = input_stream
         self.output_stream = output_stream
-        self._owns_input_stream = False
-        self._owns_output_stream = False
 
     def _setup_voice_control(self) -> CommandListener:
         """Initialize voice-control helpers and return command_listener.
@@ -623,7 +621,6 @@ class FileNarrator:
             if self.input_stream is None:
                 self.input_stream = MicrophoneInputStream(sample_rate=16000)
                 self.input_stream.start()
-                self._owns_input_stream = True
 
             audio_parser = AudioParser(
                 model_path="vosk-model-small-en-us-0.15", sample_rate=16000
@@ -644,7 +641,6 @@ class FileNarrator:
             # Ensure output stream
             if self.output_stream is None:
                 self.output_stream = SpeakerOutputStream(sample_rate=16000)
-                self._owns_output_stream = True
 
             command_listener = self._setup_voice_control()
 
@@ -686,10 +682,10 @@ class FileNarrator:
                 chunk_preprocessor.command(command)
 
         finally:
-            if self._owns_input_stream and self.input_stream:
+            if self.input_stream:
                 self.input_stream.stop()
                 print("Microphone stopped.")
-            if self._owns_output_stream and self.output_stream:
+            if self.output_stream:
                 self.output_stream.stop()
 
 
@@ -734,7 +730,9 @@ def main() -> None:
     output_stream = SpeakerOutputStream(sample_rate=16000)
     input_stream = None
     if args.voice_control:
-        input_stream = MicrophoneInputStream(sample_rate=16000)
+        input_stream = MicrophoneInputStream(
+            sample_rate=16000,
+        )
         input_stream.start()
 
     try:

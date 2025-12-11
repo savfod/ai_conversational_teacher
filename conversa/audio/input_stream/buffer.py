@@ -10,7 +10,7 @@ import numpy as np
 class AudioBuffer:
     """Thread-safe audio buffer with automatic size management."""
 
-    def __init__(self, max_duration_seconds: float = 30.0, sample_rate: int = 16000):
+    def __init__(self, max_duration_seconds: float = 60.0, sample_rate: int = 16000):
         """
         Initialize audio buffer.
 

@@ -17,8 +17,8 @@ class TestAudioBuffer:
         """Test AudioBuffer initialization with default parameters."""
         buffer = AudioBuffer()
         assert buffer.sample_rate == 16000
-        assert buffer.max_duration_seconds == 30.0
-        assert buffer.max_samples == 16000 * 30
+        assert buffer.max_duration_seconds == 60.0
+        assert buffer.max_samples == 16000 * 60
         assert buffer.get_duration() == 0.0
 
     def test_initialization_custom_parameters(self):
