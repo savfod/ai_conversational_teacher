@@ -3,12 +3,14 @@ import datetime
 import time
 
 import numpy as np
-import sounddevice as sd
 
 from conversa.audio.audio_io import save_audio
 from conversa.audio.audio_parser import AudioParser
 from conversa.audio.input_stream import AudioFileInputStream, MicrophoneInputStream
+from conversa.audio.input_stream.base import AbstractAudioInputStream
 from conversa.features.find_errors import check_for_errors
+from conversa.generated.output_stream.base import AbstractAudioOutputStream
+from conversa.generated.output_stream.speaker import SpeakerOutputStream
 from conversa.generated.speech_api import speech_to_text, text_to_speech
 from conversa.scenarios.answer import teacher_answer
 from conversa.util.io import (
@@ -33,11 +35,11 @@ def _save(message: dict, time_str: str) -> None:
     append_to_jsonl_file(message, DEFAULT_CONVERSATIONS_FILE)
 
 
-def send_tone_signal(output_stream: "sd.OutputStream", signal: str) -> None:
+def send_tone_signal(output_stream: AbstractAudioOutputStream, signal: str) -> None:
     """Play a short tone to signal state change.
 
     Args:
-        output_stream: A sounddevice OutputStream used to write the generated tone.
+        output_stream: Audio output stream used to play the generated tone.
         signal: A textual signal, e.g. 'listening' or other values to select tone.
 
     Returns:
@@ -72,51 +74,37 @@ def send_tone_signal(output_stream: "sd.OutputStream", signal: str) -> None:
         # stop tone (lower pitch, slightly longer)
         tone = _generate_tone(freq=440.0, duration=0.18)
     try:
-        output_stream.write(tone)
+        output_stream.play_chunk(tone)
+        output_stream.wait()
     except Exception as e:
         print(f"Warning: failed to play tone: {e}")
 
 
-def main(language: str, file_path: str | None = None) -> None:
+def main(
+    language: str,
+    input_stream: AbstractAudioInputStream,
+    output_stream: AbstractAudioOutputStream,
+) -> None:
     """Main entry point for demo application.
 
-    This function starts either a microphone input stream or an audio-file-based
-    input stream, processes audio to detect speech intervals, sends them to a
-    speech-to-text service, checks for language errors, and uses an LLM to
-    produce replies which are played back.
+    This function processes audio from the provided input stream, detects speech,
+    sends it to speech-to-text, checks for errors, and uses an LLM to produce
+    replies which are played back via the output stream.
 
     Args:
-        language: Language code for speech recognition and processing (e.g., "en" for English).
-        file_path: Optional path to an audio file. If provided, the file input
-            stream is used; otherwise the microphone is used.
+        language: Language code for speech recognition and processing.
+        input_stream: Configured audio input stream.
+        output_stream: Configured audio output stream.
 
     Returns:
         None
     """
-    if file_path is not None:
-        print("Starting AudioFileInputStream...")
-        input_stream = AudioFileInputStream(
-            file_path=file_path,
-        )
-        input_stream.start()
-        print("Audio file stream started.")
-    else:
-        print("Starting MicrophoneInputStream...")
-        input_stream = MicrophoneInputStream(sample_rate=16000)
-        input_stream.start()
-        print("Microphone stream started. Press Ctrl+C to stop.")
+    input_stream.start()
+    print("Stream started.")
 
     audio_parser = AudioParser(
         model_path="vosk-model-small-en-us-0.15", sample_rate=16000
     )
-
-    output_stream = sd.OutputStream(
-        samplerate=16000,
-        # blocksize=2048,
-        channels=1,
-        dtype="float32",
-    )
-    output_stream.start()
 
     history = []
     try:
@@ -164,7 +152,8 @@ def main(language: str, file_path: str | None = None) -> None:
 
                 # Optionally, convert text back to speech
                 tts_audio = text_to_speech(reply)
-                output_stream.write(tts_audio)
+                output_stream.play_chunk(tts_audio)
+                output_stream.wait()
 
                 # avoid parsing text said during blocking playbacks, e.g. TTS output
                 input_stream.get_unprocessed_chunk()
@@ -218,4 +207,23 @@ def parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     args = parse_args()
     setup_logging(level=args.log_level)
-    main(language=args.language, file_path=args.file)
+
+    # Create streams based on arguments
+    if args.file:
+        print("Starting AudioFileInputStream...")
+        input_stream = AudioFileInputStream(file_path=args.file)
+    else:
+        print("Starting MicrophoneInputStream...")
+        input_stream = MicrophoneInputStream(sample_rate=16000)
+
+    output_stream = SpeakerOutputStream(sample_rate=16000)
+
+    try:
+        main(
+            language=args.language,
+            input_stream=input_stream,
+            output_stream=output_stream,
+        )
+    finally:
+        input_stream.stop()
+        output_stream.stop()

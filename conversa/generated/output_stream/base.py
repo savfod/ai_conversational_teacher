@@ -50,3 +50,12 @@ class AbstractAudioOutputStream(abc.ABC):
             None
         """
         raise NotImplementedError()
+
+    @abc.abstractmethod
+    def is_playing(self) -> bool:
+        """Check if audio is currently playing.
+
+        Returns:
+            True if audio is playing, False otherwise
+        """
+        raise NotImplementedError()

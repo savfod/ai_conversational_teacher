@@ -224,7 +224,7 @@ class TestSpeakerOutputStream:
         time.sleep(0.3)
 
         captured = capsys.readouterr()
-        assert "Error in playback loop:" in captured.out
+        assert "Error writing to output stream" in captured.out
 
         stream.stop()
 
