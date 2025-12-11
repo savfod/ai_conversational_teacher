@@ -1,7 +1,3 @@
-"""
-Speaker output stream implementation for audio playback.
-"""
-
 import queue
 import threading
 from typing import Optional
@@ -18,7 +14,6 @@ class SpeakerOutputStream(AbstractAudioOutputStream):
     def __init__(
         self,
         sample_rate: int = 16000,
-        blocksize_sec: float = 0.5,
         channels: int = 1,
         device: Optional[int] = None,
     ):
@@ -32,144 +27,167 @@ class SpeakerOutputStream(AbstractAudioOutputStream):
         """
         super().__init__(sample_rate, channels)
         self.device = device
-        self.blocksize = int(sample_rate * blocksize_sec)
-        self._playback_queue: queue.Queue = queue.Queue()
-        self._playback_thread: Optional[threading.Thread] = None
-        self._stop_event = threading.Event()
-        self._started = False
-        self._output_stream: Optional[sd.OutputStream] = None
+        self._queue: queue.Queue = queue.Queue()
+        self._current_chunk: Optional[np.ndarray] = None
+        self._current_chunk_idx: int = 0
+        self._chunk_lock = threading.Lock()
 
-    def _playback_loop(self, stop_event: threading.Event) -> None:
-        """Playback loop that processes audio chunks from the queue."""
-        # Create the output stream
-        self._output_stream = sd.OutputStream(
-            samplerate=self.sample_rate,
-            channels=self.channels,
-            device=self.device,
-            blocksize=self.blocksize,
+        self._stream = sd.OutputStream(
+            samplerate=sample_rate,
+            blocksize=int(sample_rate * 0.1),  # 100ms block size
+            device=device,
+            channels=channels,
+            dtype="float32",
+            callback=self._callback,
+            finished_callback=self._finished_callback,
         )
-        self._output_stream.start()
+        self._stream_started = False
 
-        try:
-            while not stop_event.is_set():
+    def _callback(self, outdata, frames, time, status):
+        """Audio callback function."""
+        if status:
+            print(f"Status: {status}")
+
+        chunk_size = len(outdata)
+        out_idx = 0
+
+        # Fill outdata from queue
+        while out_idx < chunk_size:
+            # Get new chunk if needed
+            if self._current_chunk is None:
                 try:
-                    # Wait for audio chunk with timeout to check stop event
-                    audio_chunk = self._playback_queue.get(timeout=0.01)
+                    # Get next chunk - non-blocking here as we want to fill silence if empty
+                    # but actually we probably want to block? No, sounddevice callback shouldn't block too long.
+                    # But if we don't have data, we just write zeros.
+                    data = self._queue.get_nowait()
 
-                    if audio_chunk is None:  # Sentinel value to stop
-                        break
-
-                    # Write audio to output stream
-                    self._writing = True
-                    try:
-                        self._output_stream.write(audio_chunk)
-                    except Exception as e:
-                        print(f"Error writing to output stream: {e}")
-                    finally:
-                        self._writing = False
-
-                    self._playback_queue.task_done()
-
+                    # Handle stop sentinel if we were to support one, but stop() clears queue.
+                    # Just standard data here.
+                    self._current_chunk = data
+                    self._current_chunk_idx = 0
                 except queue.Empty:
-                    continue
-                except Exception as e:
-                    print(f"Error in playback loop: {e}")
-                    self._writing = False
-                    self._playback_queue.task_done()
-        finally:
-            # Clean up the output stream
-            if self._output_stream:
-                self._output_stream.stop()
-                self._output_stream.close()
-                self._output_stream = None
+                    # No more data, fill rest with zeros
+                    outdata[out_idx:] = 0
+                    return
+
+            # Copy data
+            remaining = chunk_size - out_idx
+            chunk_remaining = len(self._current_chunk) - self._current_chunk_idx
+
+            to_copy = min(remaining, chunk_remaining)
+
+            outdata[out_idx : out_idx + to_copy] = self._current_chunk[
+                self._current_chunk_idx : self._current_chunk_idx + to_copy
+            ]
+
+            out_idx += to_copy
+            self._current_chunk_idx += to_copy
+
+            # Check if chunk finished
+            if self._current_chunk_idx >= len(self._current_chunk):
+                self._current_chunk = None
+                self._queue.task_done()
+
+    def _finished_callback(self):
+        """Called when stream finishes."""
+        pass  # We don't auto-stop the stream usually, unless we want to?
 
     def play_chunk(self, audio_data: np.ndarray) -> None:
         """Play audio chunk without blocking.
 
         Args:
             audio_data: Audio data as numpy array to play
-
-        Returns:
-            None
         """
         assert audio_data is not None, "Audio data cannot be None"
         assert len(audio_data) > 0, "Audio data cannot be empty"
 
         # Ensure correct shape for channels
         if self.channels == 1 and audio_data.ndim == 1:
-            # Keep as 1D for mono
-            pass
+            audio_data = audio_data.reshape(-1, 1)
         elif self.channels > 1 and audio_data.ndim == 1:
             # Duplicate mono to all channels
             audio_data = np.tile(audio_data.reshape(-1, 1), (1, self.channels))
 
-        # Start playback thread if not already running
-        if not self._started:
-            self._current_stop_event = threading.Event()
-            self._playback_thread = threading.Thread(
-                target=self._playback_loop,
-                args=(self._current_stop_event,),
-                daemon=True,
-            )
-            self._playback_thread.start()
-            self._started = True
-            # print(
-            #     f"Speaker stream started (device: {self.device}, "
-            #     f"rate: {self.sample_rate}, channels: {self.channels})"
-            # )
+        # Ensure float32
+        if audio_data.dtype != np.float32:
+            audio_data = audio_data.astype(np.float32)
 
-        self._playback_queue.put(audio_data)
+        self._queue.put(audio_data)
+
+        if not self._stream_started:
+            self._stream.start()
+            self._stream_started = True
 
     def stop(self) -> None:
-        """Stop the audio output stream.
-
-        Returns:
-            None
-        """
-        if not self._started:
+        """Stop the audio output stream immediately."""
+        if not self._stream_started:
             return
 
-        # Signal thread to stop
-        if hasattr(self, "_current_stop_event"):
-            self._current_stop_event.set()
+        # Stop stream immediately
+        self._stream.stop()
+        self._stream_started = False
 
-        # Put sentinel value to unblock the queue
-        self._playback_queue.put(None)
-
-        # Wait for thread to finish
-        if self._playback_thread and self._playback_thread.is_alive():
-            self._playback_thread.join(timeout=1.0)
-
-        # Clear any remaining items in the queue
-        while not self._playback_queue.empty():
+        # Clear queue
+        while not self._queue.empty():
             try:
-                self._playback_queue.get_nowait()
-                self._playback_queue.task_done()
+                self._queue.get_nowait()
+                self._queue.task_done()
             except queue.Empty:
                 break
 
-        self._started = False
+        # Clear current chunk
+        with self._chunk_lock:
+            # Note: We can't easily clear _current_chunk inside callback from here safely without lock
+            # But since we stopped stream, callback won't run.
+            # Reset state for next play
+            if self._current_chunk is not None:
+                # We need to manually task_done if we are discarding a chunk that was halfway played?
+                # Actually, if we pulled it from valid queue item, we should task_done it if we discard it.
+                # But typically we just reset.
+                self._current_chunk = None
+                self._current_chunk_idx = 0
+                # If we broke in middle of chunk, that chunk was already 'get' from queue.
+                # So we should call task_done if we aren't going to finish it?
+                # The queue.join() relies on task_done.
+                # If callback pulled it, it's responsible.
+                # If callback didn't finish it, we must finish it?
+                # Actually, simpler: we stopped stream. Next start will create new stream or reuse?
+                # Sounddevice streams can be restarted.
+                pass
+
+        # Re-create stream or just stop/start?
+        # stop() makes it inactive. start() resumes? or restarts?
+        # SD docs: "stopped stream can be restarted".
+        # However, buffer state in callback might be stale?
+        # We manually reset _current_chunk = None above, so next callback start fresh from queue.
+        # But wait, if we stopped in middle of callback?
+        # callback doesn't run while stopped.
+
+        # Crucially: we need to ensure play_chunk works again.
+        # If we just _stream.stop(), we can _stream.start() later.
+
+        # But we also need to make sure `wait()` doesn't hang if we stopped.
+        # `wait()` waits for queue.join().
+        # If we cleared queue, we called task_down for all items in queue?
+        # Yes, in the while loop above.
+        # But what about the item currently in `_current_chunk`?
+        # That item was popped from queue. task_done() is called only when finished.
+        # If we interrupt, we must call task_done() for it too!
+        if self._current_chunk is not None:
+            self._queue.task_done()
+            self._current_chunk = None
+
         print("Speaker stream stopped")
 
     def wait(self) -> None:
-        """Block until all audio playback is finished.
-
-        Returns:
-            None
-        """
-        if not self._started:
+        """Block until all audio playback is finished."""
+        if not self._stream_started and self._queue.empty():
             return
 
-        # Wait for queue to be empty
-        self._playback_queue.join()
+        self._queue.join()
 
     def is_playing(self) -> bool:
-        """Check if audio is currently playing.
-
-        Returns:
-            True if audio is playing (queue not empty or currently writing), False otherwise
-        """
-        # We consider it playing if the queue has items or if the thread is currently writing
-        # Note: This is an approximation. The underlying stream implementation details
-        # determine exactly when sound stops, but this tracks our application-level buffer.
-        return not self._playback_queue.empty() or getattr(self, "_writing", False)
+        """Check if audio is currently playing."""
+        if not self._stream_started:
+            return False
+        return not self._queue.empty() or self._current_chunk is not None

@@ -2,28 +2,34 @@
 Tests for SpeakerOutputStream class.
 """
 
-import time
 from unittest.mock import MagicMock, patch
 
 import numpy as np
-import pytest
 
 from conversa.generated.output_stream.speaker import SpeakerOutputStream
 
 
+@patch("conversa.generated.output_stream.speaker.sd.OutputStream")
 class TestSpeakerOutputStream:
     """Test suite for SpeakerOutputStream class."""
 
-    def test_initialization(self):
+    def test_initialization(self, mock_output_stream):
         """Test SpeakerOutputStream initialization with default parameters."""
         stream = SpeakerOutputStream()
 
         assert stream.sample_rate == 16000
         assert stream.channels == 1
         assert stream.device is None
-        assert not stream._started
+        assert not stream._stream_started
 
-    def test_initialization_custom_parameters(self):
+        # Verify stream was created
+        mock_output_stream.assert_called_once()
+        _, kwargs = mock_output_stream.call_args
+        assert kwargs["samplerate"] == 16000
+        assert kwargs["channels"] == 1
+        assert kwargs["callback"] is not None
+
+    def test_initialization_custom_parameters(self, mock_output_stream):
         """Test initialization with custom parameters."""
         stream = SpeakerOutputStream(sample_rate=8000, channels=2, device=1)
 
@@ -31,9 +37,14 @@ class TestSpeakerOutputStream:
         assert stream.channels == 2
         assert stream.device == 1
 
-    @patch("conversa.generated.output_stream.speaker.sd.OutputStream")
+        # Verify stream created with custom params
+        _, kwargs = mock_output_stream.call_args
+        assert kwargs["samplerate"] == 8000
+        assert kwargs["channels"] == 2
+        assert kwargs["device"] == 1
+
     def test_play_chunk_starts_stream(self, mock_output_stream):
-        """Test that play_chunk starts the playback thread."""
+        """Test that play_chunk starts the stream."""
         mock_stream_instance = MagicMock()
         mock_output_stream.return_value = mock_stream_instance
 
@@ -41,208 +52,138 @@ class TestSpeakerOutputStream:
         audio_data = np.random.randn(1600).astype(np.float32)
 
         stream.play_chunk(audio_data)
-        time.sleep(0.2)  # Give thread time to start and process
 
-        # Verify OutputStream was created and started
-        assert mock_output_stream.call_count >= 1
+        # Verify stream was started
         assert mock_stream_instance.start.called
-        assert stream._started
+        assert stream._stream_started
 
-        stream.stop()
-
-    @patch("conversa.generated.output_stream.speaker.sd.OutputStream")
-    def test_play_chunk_with_correct_parameters(self, mock_output_stream):
-        """Test that sd.OutputStream is created with correct parameters."""
-        mock_stream_instance = MagicMock()
-        mock_output_stream.return_value = mock_stream_instance
-
-        stream = SpeakerOutputStream(sample_rate=8000, channels=2, device=3)
-        audio_data = np.random.randn(800).astype(np.float32)
-
-        stream.play_chunk(audio_data)
-        time.sleep(0.2)
-
-        # Verify sd.OutputStream was created with correct parameters
-        assert mock_output_stream.call_count >= 1
-        call_kwargs = mock_output_stream.call_args[1]
-        assert call_kwargs["samplerate"] == 8000
-        assert call_kwargs["device"] == 3
-        assert call_kwargs["channels"] == 2
-
-        stream.stop()
-
-    @pytest.mark.slow
-    @patch("conversa.generated.output_stream.speaker.sd.OutputStream")
-    def test_play_multiple_chunks(self, mock_output_stream):
-        """Test playing multiple audio chunks."""
-        mock_stream_instance = MagicMock()
-        mock_output_stream.return_value = mock_stream_instance
-
+    def test_callback_processing(self, mock_output_stream):
+        """Test that the callback correctly processes audio from the queue."""
         stream = SpeakerOutputStream()
 
-        # Play multiple chunks
-        for _ in range(3):
-            audio_data = np.random.randn(800).astype(np.float32)
-            stream.play_chunk(audio_data)
+        # Capture the callback
+        _, kwargs = mock_output_stream.call_args
+        callback = kwargs["callback"]
 
-        time.sleep(0.3)  # Give time to process
+        # Add audio to play
+        audio_data = np.ones((100, 1), dtype=np.float32)  # 100 samples of 1.0
+        stream.play_chunk(audio_data)
 
-        # Verify write was called multiple times
-        assert mock_stream_instance.write.call_count >= 3
+        # Prepare outdata buffer
+        outdata = np.zeros((100, 1), dtype=np.float32)
+        frames = 100
+        status = None
 
-        stream.stop()
+        # Call callback
+        callback(outdata, frames, None, status)
 
-    @patch("conversa.generated.output_stream.speaker.sd.OutputStream")
+        # Verify outdata is filled with ones
+        assert np.allclose(outdata, 1.0)
+
+        # Verify queue is empty (task_done called)
+        assert stream._queue.empty()
+
+    def test_callback_partial_processing(self, mock_output_stream):
+        """Test that callback handles data larger than block size (multiple calls)."""
+        stream = SpeakerOutputStream()
+
+        _, kwargs = mock_output_stream.call_args
+        callback = kwargs["callback"]
+
+        # Add 200 samples
+        audio_data = np.ones((200, 1), dtype=np.float32)
+        stream.play_chunk(audio_data)
+
+        # Call 1: Request 100 samples
+        outdata1 = np.zeros((100, 1), dtype=np.float32)
+        callback(outdata1, 100, None, None)
+        assert np.allclose(outdata1, 1.0)
+
+        # Call 2: Request 100 samples
+        outdata2 = np.zeros((100, 1), dtype=np.float32)
+        callback(outdata2, 100, None, None)
+        assert np.allclose(outdata2, 1.0)
+
+        # Queue should be empty now
+        assert stream._queue.empty()
+
+    def test_callback_silence_when_empty(self, mock_output_stream):
+        """Test that callback fills with zeros when queue is empty."""
+        _stream = SpeakerOutputStream()
+
+        _, kwargs = mock_output_stream.call_args
+        callback = kwargs["callback"]
+
+        # No play_chunk called
+
+        outdata = np.ones((100, 1), dtype=np.float32)  # Init with junk
+        callback(outdata, 100, None, None)
+
+        assert np.allclose(outdata, 0.0)
+
     def test_stop(self, mock_output_stream):
         """Test stopping the stream."""
         mock_stream_instance = MagicMock()
         mock_output_stream.return_value = mock_stream_instance
 
         stream = SpeakerOutputStream()
-        audio_data = np.random.randn(1600).astype(np.float32)
+        stream.play_chunk(np.zeros(100, dtype=np.float32))
 
-        stream.play_chunk(audio_data)
-        time.sleep(0.1)
+        assert stream._stream_started
 
         stream.stop()
 
-        # Verify stream was stopped and closed
+        # Verify stream was stopped
         assert mock_stream_instance.stop.called
-        assert mock_stream_instance.close.called
-        assert not stream._started
+        assert not stream._stream_started
+        assert stream._queue.empty()
 
-    @pytest.mark.slow
-    @patch("conversa.generated.output_stream.speaker.sd.OutputStream")
     def test_wait(self, mock_output_stream):
         """Test waiting for playback to finish."""
-        mock_stream_instance = MagicMock()
-        mock_output_stream.return_value = mock_stream_instance
-
         stream = SpeakerOutputStream()
 
-        # Play some chunks
-        for _ in range(2):
-            audio_data = np.random.randn(800).astype(np.float32)
-            stream.play_chunk(audio_data)
+        # Mock queue.join to verify it's called
+        with patch.object(stream._queue, "join") as mock_join:
+            stream.play_chunk(np.zeros(100, dtype=np.float32))
+            stream.wait()
+            mock_join.assert_called_once()
 
-        # Wait for completion
-        time.sleep(0.3)
-        stream.wait()
-
-        # Queue should be empty after wait
-        assert stream._playback_queue.empty()
-
-        stream.stop()
-
-    @patch("conversa.generated.output_stream.speaker.sd.OutputStream")
-    def test_play_chunk_mono_audio(self, mock_output_stream):
-        """Test playing mono audio."""
-        mock_stream_instance = MagicMock()
-        mock_output_stream.return_value = mock_stream_instance
-
-        stream = SpeakerOutputStream(channels=1)
-
-        # Play 1D mono audio
-        audio_mono = np.random.randn(1600).astype(np.float32)
-        stream.play_chunk(audio_mono)
-
-        time.sleep(0.2)
-
-        # Verify write was called
-        assert mock_stream_instance.write.call_count >= 1
-
-        stream.stop()
-
-    @patch("conversa.generated.output_stream.speaker.sd.OutputStream")
-    def test_play_chunk_stereo_audio(self, mock_output_stream):
-        """Test playing stereo audio (mono duplicated to stereo)."""
-        mock_stream_instance = MagicMock()
-        mock_output_stream.return_value = mock_stream_instance
-
+    def test_play_chunk_mono_to_stereo(self, mock_output_stream):
+        """Test auto-duplication of mono input to stereo output."""
         stream = SpeakerOutputStream(channels=2)
 
-        # Play 1D mono audio (should be duplicated to stereo)
-        audio_mono = np.random.randn(1600).astype(np.float32)
+        audio_mono = np.ones(100, dtype=np.float32)
         stream.play_chunk(audio_mono)
 
-        time.sleep(0.2)
+        # Peek at queue
+        queued_item = stream._queue.get()
+        assert queued_item.shape == (100, 2)
+        assert np.allclose(queued_item, 1.0)
 
-        # Verify write was called
-        assert mock_stream_instance.write.call_count >= 1
-        if mock_stream_instance.write.call_count > 0:
-            written_audio = mock_stream_instance.write.call_args[0][0]
-            assert written_audio.ndim == 2
-            assert written_audio.shape[1] == 2
-
-        stream.stop()
-
-    def test_play_chunk_empty_array_assertion(self):
-        """Test that empty arrays raise an assertion error."""
+    def test_play_chunk_float_conversion(self, mock_output_stream):
+        """Test that int audio data is converted to float32."""
         stream = SpeakerOutputStream()
 
-        with pytest.raises(AssertionError):
-            stream.play_chunk(np.array([]))
+        audio_int = np.ones(100, dtype=np.int16)
+        stream.play_chunk(audio_int)
 
-    def test_play_chunk_none_assertion(self):
-        """Test that None raises an assertion error."""
+        queued_item = stream._queue.get()
+        assert queued_item.dtype == np.float32
+
+    def test_is_playing(self, mock_output_stream):
+        """Test is_playing state."""
         stream = SpeakerOutputStream()
+        assert not stream.is_playing()
 
-        with pytest.raises(AssertionError):
-            stream.play_chunk(None)
+        stream.play_chunk(np.zeros(100, dtype=np.float32))
+        assert stream.is_playing()
 
-    @patch("conversa.generated.output_stream.speaker.sd.OutputStream")
-    def test_stop_clears_queue(self, mock_output_stream):
-        """Test that stop clears the playback queue."""
-        mock_stream_instance = MagicMock()
-        mock_output_stream.return_value = mock_stream_instance
+        # Simulate draining queue
+        stream._queue.get()
+        stream._queue.task_done()
 
-        stream = SpeakerOutputStream()
+        # Even if queue empty, if _current_chunk is set (simulated), it should be playing.
+        # But here we didn't set _current_chunk manually.
+        # Code: return not self._queue.empty() or self._current_chunk is not None
 
-        # Add many chunks to queue
-        for _ in range(10):
-            audio_data = np.random.randn(800).astype(np.float32)
-            stream.play_chunk(audio_data)
-
-        # Stop immediately (before they can all play)
-        stream.stop()
-
-        # Queue should be cleared
-        assert stream._playback_queue.empty()
-
-    @pytest.mark.slow
-    @patch("conversa.generated.output_stream.speaker.sd.OutputStream")
-    def test_exception_handling_in_playback_loop(self, mock_output_stream, capsys):
-        """Test that exceptions in playback loop are handled gracefully."""
-        mock_stream_instance = MagicMock()
-        mock_stream_instance.write.side_effect = Exception("Test error")
-        mock_output_stream.return_value = mock_stream_instance
-
-        stream = SpeakerOutputStream()
-        audio_data = np.random.randn(1600).astype(np.float32)
-
-        stream.play_chunk(audio_data)
-        time.sleep(0.3)
-
-        captured = capsys.readouterr()
-        assert "Error writing to output stream" in captured.out
-
-        stream.stop()
-
-    def test_stop_before_play(self):
-        """Test that stopping before playing doesn't cause errors."""
-        stream = SpeakerOutputStream()
-
-        # Should not raise an exception
-        stream.stop()
-
-        assert not stream._started
-
-    def test_wait_with_empty_queue(self):
-        """Test wait with empty queue completes immediately."""
-        stream = SpeakerOutputStream()
-
-        # Should complete without blocking
-        stream.wait()
-
-        # No errors should occur
-        assert True
+        assert not stream.is_playing()

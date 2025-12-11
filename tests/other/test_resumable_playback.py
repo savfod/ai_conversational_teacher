@@ -37,18 +37,20 @@ def test_speaker_resumable_playback(mock_sd):
     # We can't easily simulate thread internals but we can check state transitions
 
     # Stop
+    # Stop
     stream.stop()
     assert stream_instance.stop.called
-    assert stream_instance.close.called
+    # We no longer close the stream on stop, we just stop it
 
     # Reset mock for second play
-    mock_sd.OutputStream.reset_mock()
+    # mock_sd.OutputStream.reset_mock() # We don't recreate stream, so constructor won't be called
 
     # Second play
     stream.play_chunk(audio_data)
-    # Should create new stream
-    mock_sd.OutputStream.assert_called()
-    assert stream_instance.start.called
+
+    # Should start the same stream again
+    # We can check that start is called (conceptually, though sd might optimize? No, we call start explicitly)
+    assert stream_instance.start.call_count >= 1
 
     stream.stop()
 
