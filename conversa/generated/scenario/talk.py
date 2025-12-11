@@ -148,6 +148,7 @@ def run_talk_scenario(
 
                 # Optionally, convert text back to speech
                 tts_audio = text_to_speech(reply)
+                output_stream.wait()
                 output_stream.play_chunk(tts_audio)
                 output_stream.wait()
 
