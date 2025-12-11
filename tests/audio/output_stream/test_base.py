@@ -36,6 +36,10 @@ class ConcreteAudioOutputStream(AbstractAudioOutputStream):
         """Test implementation that sets wait flag."""
         self.wait_called = True
 
+    def is_playing(self) -> bool:
+        """Test implementation of is_playing."""
+        return not self.is_stopped
+
 
 class TestAbstractAudioOutputStream:
     """Test suite for AbstractAudioOutputStream base class."""

@@ -61,6 +61,15 @@ class FileOutputStream(AbstractAudioOutputStream):
             return
 
         self._save_to_file()
+        # We don't mark as closed permanently to allow resumption.
+        pass
+
+    def close(self) -> None:
+        """Permanently close the stream."""
+        if self._is_closed:
+            return
+
+        self.stop()
         self._is_closed = True
 
     def wait(self) -> None:
@@ -72,13 +81,13 @@ class FileOutputStream(AbstractAudioOutputStream):
         Returns:
             None
         """
-        if not self._is_closed:
-            self.stop()
+        # Ensure data is saved
+        self.stop()
 
     def _save_to_file(self) -> None:
         """Save all buffered audio chunks to the output file."""
         if not self._audio_chunks:
-            print(f"Warning: No audio chunks to save to {self.output_path}")
+            # print(f"Warning: No audio chunks to save to {self.output_path}")
             return
 
         # Concatenate all chunks
@@ -114,3 +123,7 @@ class FileOutputStream(AbstractAudioOutputStream):
             Number of chunks.
         """
         return len(self._audio_chunks)
+
+    def is_playing(self) -> bool:
+        """Check if audio is currently playing."""
+        return False

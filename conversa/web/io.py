@@ -101,7 +101,12 @@ class WebOutputStream(AbstractAudioOutputStream):
         pass
 
     def wait(self) -> None:
-        # We can't easily wait for the client to finish playing audio
-        # without a callback protocol.
         # So we just return immediately or sleep briefly.
         pass
+
+    def is_playing(self) -> bool:
+        """Check if audio is currently playing.
+
+        For web output, we don't track client playback state.
+        """
+        return False

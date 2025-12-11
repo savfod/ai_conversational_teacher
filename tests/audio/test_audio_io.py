@@ -112,6 +112,7 @@ class TestAudioIO:
                     err_msg=f"Audio data differs for sample rate {sr}",
                 )
 
+    @pytest.mark.slow
     def test_save_and_read_edge_cases(self):
         """Test saving and reading audio with edge case values."""
         sample_rate = 16000

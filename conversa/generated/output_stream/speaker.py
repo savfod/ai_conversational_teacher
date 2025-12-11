@@ -39,7 +39,7 @@ class SpeakerOutputStream(AbstractAudioOutputStream):
         self._started = False
         self._output_stream: Optional[sd.OutputStream] = None
 
-    def _playback_loop(self) -> None:
+    def _playback_loop(self, stop_event: threading.Event) -> None:
         """Playback loop that processes audio chunks from the queue."""
         # Create the output stream
         self._output_stream = sd.OutputStream(
@@ -51,7 +51,7 @@ class SpeakerOutputStream(AbstractAudioOutputStream):
         self._output_stream.start()
 
         try:
-            while not self._stop_event.is_set():
+            while not stop_event.is_set():
                 try:
                     # Wait for audio chunk with timeout to check stop event
                     audio_chunk = self._playback_queue.get(timeout=0.01)
@@ -60,7 +60,13 @@ class SpeakerOutputStream(AbstractAudioOutputStream):
                         break
 
                     # Write audio to output stream
-                    self._output_stream.write(audio_chunk)
+                    self._writing = True
+                    try:
+                        self._output_stream.write(audio_chunk)
+                    except Exception as e:
+                        print(f"Error writing to output stream: {e}")
+                    finally:
+                        self._writing = False
 
                     self._playback_queue.task_done()
 
@@ -68,6 +74,7 @@ class SpeakerOutputStream(AbstractAudioOutputStream):
                     continue
                 except Exception as e:
                     print(f"Error in playback loop: {e}")
+                    self._writing = False
                     self._playback_queue.task_done()
         finally:
             # Clean up the output stream
@@ -98,16 +105,18 @@ class SpeakerOutputStream(AbstractAudioOutputStream):
 
         # Start playback thread if not already running
         if not self._started:
-            self._stop_event.clear()
+            self._current_stop_event = threading.Event()
             self._playback_thread = threading.Thread(
-                target=self._playback_loop, daemon=True
+                target=self._playback_loop,
+                args=(self._current_stop_event,),
+                daemon=True,
             )
             self._playback_thread.start()
             self._started = True
-            print(
-                f"Speaker stream started (device: {self.device}, "
-                f"rate: {self.sample_rate}, channels: {self.channels})"
-            )
+            # print(
+            #     f"Speaker stream started (device: {self.device}, "
+            #     f"rate: {self.sample_rate}, channels: {self.channels})"
+            # )
 
         self._playback_queue.put(audio_data)
 
@@ -121,7 +130,8 @@ class SpeakerOutputStream(AbstractAudioOutputStream):
             return
 
         # Signal thread to stop
-        self._stop_event.set()
+        if hasattr(self, "_current_stop_event"):
+            self._current_stop_event.set()
 
         # Put sentinel value to unblock the queue
         self._playback_queue.put(None)
@@ -147,5 +157,19 @@ class SpeakerOutputStream(AbstractAudioOutputStream):
         Returns:
             None
         """
+        if not self._started:
+            return
+
         # Wait for queue to be empty
         self._playback_queue.join()
+
+    def is_playing(self) -> bool:
+        """Check if audio is currently playing.
+
+        Returns:
+            True if audio is playing (queue not empty or currently writing), False otherwise
+        """
+        # We consider it playing if the queue has items or if the thread is currently writing
+        # Note: This is an approximation. The underlying stream implementation details
+        # determine exactly when sound stops, but this tracks our application-level buffer.
+        return not self._playback_queue.empty() or getattr(self, "_writing", False)
