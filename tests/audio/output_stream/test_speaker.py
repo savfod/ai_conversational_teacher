@@ -20,14 +20,11 @@ class TestSpeakerOutputStream:
         assert stream.sample_rate == 16000
         assert stream.channels == 1
         assert stream.device is None
-        assert not stream._stream_started
+        assert stream._stream is None
+        assert not stream.is_playing()
 
-        # Verify stream was created
-        mock_output_stream.assert_called_once()
-        _, kwargs = mock_output_stream.call_args
-        assert kwargs["samplerate"] == 16000
-        assert kwargs["channels"] == 1
-        assert kwargs["callback"] is not None
+        # Verify stream was NOT created in init
+        mock_output_stream.assert_not_called()
 
     def test_initialization_custom_parameters(self, mock_output_stream):
         """Test initialization with custom parameters."""
@@ -37,11 +34,8 @@ class TestSpeakerOutputStream:
         assert stream.channels == 2
         assert stream.device == 1
 
-        # Verify stream created with custom params
-        _, kwargs = mock_output_stream.call_args
-        assert kwargs["samplerate"] == 8000
-        assert kwargs["channels"] == 2
-        assert kwargs["device"] == 1
+        # Verify stream NOT created yet
+        mock_output_stream.assert_not_called()
 
     def test_play_chunk_starts_stream(self, mock_output_stream):
         """Test that play_chunk starts the stream."""
@@ -53,19 +47,28 @@ class TestSpeakerOutputStream:
 
         stream.play_chunk(audio_data)
 
-        # Verify stream was started
+        # Verify stream was created and started
+        mock_output_stream.assert_called_once()
         assert mock_stream_instance.start.called
-        assert stream._stream_started
+        assert stream.is_playing()
 
     def test_callback_processing(self, mock_output_stream):
         """Test that the callback correctly processes audio from the queue."""
         stream = SpeakerOutputStream()
 
+        # Trigger stream creation to get access to callback
+        stream.play_chunk(np.zeros(10))
+
         # Capture the callback
         _, kwargs = mock_output_stream.call_args
         callback = kwargs["callback"]
 
-        # Add audio to play
+        # Clear queue from initial play_chunk call
+        while not stream._queue.empty():
+            stream._queue.get()
+            stream._queue.task_done()
+
+        # Now add real audio to play
         audio_data = np.ones((100, 1), dtype=np.float32)  # 100 samples of 1.0
         stream.play_chunk(audio_data)
 
@@ -87,8 +90,15 @@ class TestSpeakerOutputStream:
         """Test that callback handles data larger than block size (multiple calls)."""
         stream = SpeakerOutputStream()
 
+        # Trigger stream creation
+        stream.play_chunk(np.zeros(10))
         _, kwargs = mock_output_stream.call_args
         callback = kwargs["callback"]
+
+        # Clear queue
+        while not stream._queue.empty():
+            stream._queue.get()
+            stream._queue.task_done()
 
         # Add 200 samples
         audio_data = np.ones((200, 1), dtype=np.float32)
@@ -109,12 +119,18 @@ class TestSpeakerOutputStream:
 
     def test_callback_silence_when_empty(self, mock_output_stream):
         """Test that callback fills with zeros when queue is empty."""
-        _stream = SpeakerOutputStream()
+        stream = SpeakerOutputStream()
 
+        stream.play_chunk(np.zeros(10))
         _, kwargs = mock_output_stream.call_args
         callback = kwargs["callback"]
 
-        # No play_chunk called
+        # Clear queue
+        while not stream._queue.empty():
+            stream._queue.get()
+            stream._queue.task_done()
+
+        # No play_chunk called (queue empty)
 
         outdata = np.ones((100, 1), dtype=np.float32)  # Init with junk
         callback(outdata, 100, None, None)
@@ -129,13 +145,15 @@ class TestSpeakerOutputStream:
         stream = SpeakerOutputStream()
         stream.play_chunk(np.zeros(100, dtype=np.float32))
 
-        assert stream._stream_started
+        assert stream.is_playing()
 
         stream.stop()
 
-        # Verify stream was stopped
+        # Verify stream was stopped and closed
         assert mock_stream_instance.stop.called
-        assert not stream._stream_started
+        assert mock_stream_instance.close.called
+        assert not stream.is_playing()
+        assert stream._stream is None
         assert stream._queue.empty()
 
     def test_wait(self, mock_output_stream):
@@ -182,8 +200,29 @@ class TestSpeakerOutputStream:
         stream._queue.get()
         stream._queue.task_done()
 
-        # Even if queue empty, if _current_chunk is set (simulated), it should be playing.
-        # But here we didn't set _current_chunk manually.
-        # Code: return not self._queue.empty() or self._current_chunk is not None
+        # Need to ensure current chunk is cleared too for is_playing to be false
+        # But we can't easily access internals here if we just peek
+        # Actually is_playing checks: stream is not None AND (queue not empty OR current_chunk not None)
 
-        assert not stream.is_playing()
+        # If we didn't run callback, current_chunk stays None unless we manually set it
+        # Wait, if we pull from queue via get(), stream._current_chunk is not set.
+        # So is_playing will be True because stream is not None, but queue empty?
+        # NO, code: `if self._stream is None: return False`
+        # `return not self._queue.empty() or self._current_chunk is not None`
+
+        # So if we manually empty queue, is_playing should be False (since current_chunk is None)
+        assert not stream.is_playing()  # Stream is active but no content
+
+        # queue is passed to get(), so it is empty.
+
+        # Ah, play_chunk sets stream.
+        # queue empty. current_chunk None.
+        # So is_playing returns False? NO.
+        # It returns `not self._queue.empty()` which is False (queue is empty).
+        # OR `self._current_chunk is not None` which is False.
+        # So is_playing() returns False.
+
+        assert not stream.is_playing()  # stream exists, but no data.
+
+        # BUT this might be flaky if we consider that stream exists means "active".
+        # But existing implementation: playing means has data.

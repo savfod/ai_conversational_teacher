@@ -32,16 +32,8 @@ class SpeakerOutputStream(AbstractAudioOutputStream):
         self._current_chunk_idx: int = 0
         self._chunk_lock = threading.Lock()
 
-        self._stream = sd.OutputStream(
-            samplerate=sample_rate,
-            blocksize=int(sample_rate * 0.1),  # 100ms block size
-            device=device,
-            channels=channels,
-            dtype="float32",
-            callback=self._callback,
-            finished_callback=self._finished_callback,
-        )
-        self._stream_started = False
+        # Stream is now created on demand
+        self._stream: Optional[sd.OutputStream] = None
 
     def _callback(self, outdata, frames, time, status):
         """Audio callback function."""
@@ -53,40 +45,35 @@ class SpeakerOutputStream(AbstractAudioOutputStream):
 
         # Fill outdata from queue
         while out_idx < chunk_size:
-            # Get new chunk if needed
-            if self._current_chunk is None:
-                try:
-                    # Get next chunk - non-blocking here as we want to fill silence if empty
-                    # but actually we probably want to block? No, sounddevice callback shouldn't block too long.
-                    # But if we don't have data, we just write zeros.
-                    data = self._queue.get_nowait()
+            with self._chunk_lock:
+                # Get new chunk if needed
+                if self._current_chunk is None:
+                    try:
+                        data = self._queue.get_nowait()
+                        self._current_chunk = data
+                        self._current_chunk_idx = 0
+                    except queue.Empty:
+                        # No more data, fill rest with zeros
+                        outdata[out_idx:] = 0
+                        return
 
-                    # Handle stop sentinel if we were to support one, but stop() clears queue.
-                    # Just standard data here.
-                    self._current_chunk = data
-                    self._current_chunk_idx = 0
-                except queue.Empty:
-                    # No more data, fill rest with zeros
-                    outdata[out_idx:] = 0
-                    return
+                # Copy data
+                remaining = chunk_size - out_idx
+                chunk_remaining = len(self._current_chunk) - self._current_chunk_idx
 
-            # Copy data
-            remaining = chunk_size - out_idx
-            chunk_remaining = len(self._current_chunk) - self._current_chunk_idx
+                to_copy = min(remaining, chunk_remaining)
 
-            to_copy = min(remaining, chunk_remaining)
+                outdata[out_idx : out_idx + to_copy] = self._current_chunk[
+                    self._current_chunk_idx : self._current_chunk_idx + to_copy
+                ]
 
-            outdata[out_idx : out_idx + to_copy] = self._current_chunk[
-                self._current_chunk_idx : self._current_chunk_idx + to_copy
-            ]
+                out_idx += to_copy
+                self._current_chunk_idx += to_copy
 
-            out_idx += to_copy
-            self._current_chunk_idx += to_copy
-
-            # Check if chunk finished
-            if self._current_chunk_idx >= len(self._current_chunk):
-                self._current_chunk = None
-                self._queue.task_done()
+                # Check if chunk finished
+                if self._current_chunk_idx >= len(self._current_chunk):
+                    self._current_chunk = None
+                    self._queue.task_done()
 
     def _finished_callback(self):
         """Called when stream finishes."""
@@ -114,18 +101,33 @@ class SpeakerOutputStream(AbstractAudioOutputStream):
 
         self._queue.put(audio_data)
 
-        if not self._stream_started:
+        # Create/Start stream if not active
+        if self._stream is None:
+            self._stream = sd.OutputStream(
+                samplerate=self.sample_rate,
+                blocksize=int(self.sample_rate * 0.1),  # 100ms block size
+                device=self.device,
+                channels=self.channels,
+                dtype="float32",
+                callback=self._callback,
+                finished_callback=self._finished_callback,
+            )
             self._stream.start()
-            self._stream_started = True
 
     def stop(self) -> None:
         """Stop the audio output stream immediately."""
-        if not self._stream_started:
+        if self._stream is None:
             return
 
-        # Stop stream immediately
-        self._stream.stop()
-        self._stream_started = False
+        # Stop and close stream immediately
+        # We catch potential errors if stream is arguably already closed
+        try:
+            self._stream.stop()
+            self._stream.close()
+        except Exception as e:
+            print(f"Error stopping stream: {e}")
+
+        self._stream = None
 
         # Clear queue
         while not self._queue.empty():
@@ -137,57 +139,30 @@ class SpeakerOutputStream(AbstractAudioOutputStream):
 
         # Clear current chunk
         with self._chunk_lock:
-            # Note: We can't easily clear _current_chunk inside callback from here safely without lock
-            # But since we stopped stream, callback won't run.
-            # Reset state for next play
             if self._current_chunk is not None:
-                # We need to manually task_done if we are discarding a chunk that was halfway played?
-                # Actually, if we pulled it from valid queue item, we should task_done it if we discard it.
-                # But typically we just reset.
                 self._current_chunk = None
                 self._current_chunk_idx = 0
-                # If we broke in middle of chunk, that chunk was already 'get' from queue.
-                # So we should call task_done if we aren't going to finish it?
-                # The queue.join() relies on task_done.
-                # If callback pulled it, it's responsible.
-                # If callback didn't finish it, we must finish it?
-                # Actually, simpler: we stopped stream. Next start will create new stream or reuse?
-                # Sounddevice streams can be restarted.
-                pass
-
-        # Re-create stream or just stop/start?
-        # stop() makes it inactive. start() resumes? or restarts?
-        # SD docs: "stopped stream can be restarted".
-        # However, buffer state in callback might be stale?
-        # We manually reset _current_chunk = None above, so next callback start fresh from queue.
-        # But wait, if we stopped in middle of callback?
-        # callback doesn't run while stopped.
-
-        # Crucially: we need to ensure play_chunk works again.
-        # If we just _stream.stop(), we can _stream.start() later.
-
-        # But we also need to make sure `wait()` doesn't hang if we stopped.
-        # `wait()` waits for queue.join().
-        # If we cleared queue, we called task_down for all items in queue?
-        # Yes, in the while loop above.
-        # But what about the item currently in `_current_chunk`?
-        # That item was popped from queue. task_done() is called only when finished.
-        # If we interrupt, we must call task_done() for it too!
-        if self._current_chunk is not None:
-            self._queue.task_done()
-            self._current_chunk = None
+                # Important: Mark the interrupted chunk as done so queue.join() doesn't block
+                # HOWEVER: if we pulled it from the queue, we must task_done it.
+                # In _callback, we task_done ONLY when finished.
+                # So if we interrupt it, we MUST task_done it here.
+                try:
+                    self._queue.task_done()
+                except ValueError:
+                    # Could happen if called too many times? Should not if we logic is correct.
+                    pass
 
         print("Speaker stream stopped")
 
     def wait(self) -> None:
         """Block until all audio playback is finished."""
-        if not self._stream_started and self._queue.empty():
+        if self._stream is None and self._queue.empty():
             return
 
         self._queue.join()
 
     def is_playing(self) -> bool:
         """Check if audio is currently playing."""
-        if not self._stream_started:
+        if self._stream is None:
             return False
         return not self._queue.empty() or self._current_chunk is not None
