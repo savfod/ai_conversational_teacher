@@ -132,4 +132,4 @@ if __name__ == "__main__":
 
     # Run the server
     # Note: We run this in the main thread as it blocks
-    server.run_server(host="127.0.0.1", port=5555, debug=True)
+    server.run_server(host="0.0.0.0", port=5555, debug=True)

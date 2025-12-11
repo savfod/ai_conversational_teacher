@@ -74,6 +74,7 @@ class WebOutputStream(AbstractAudioOutputStream):
     ):
         super().__init__(sample_rate, channels)
         self.sid = sid
+        self.last_chunk_finish_time = 0.0
 
     def play_chunk(self, audio_data: np.ndarray) -> None:
         """
@@ -83,9 +84,18 @@ class WebOutputStream(AbstractAudioOutputStream):
             return
 
         try:
+            # Update expected finish time
+            duration = len(audio_data) / self.sample_rate
+            now = time.time()
+            if self.last_chunk_finish_time < now:
+                self.last_chunk_finish_time = now
+
+            self.last_chunk_finish_time += duration
+
             # Convert float32 numpy array to WAV bytes
             buffer = BytesIO()
             # soundfile handles float32 (-1.0 to 1.0) automatically
+
             sf.write(buffer, audio_data, samplerate=self.sample_rate, format="WAV")
             wav_bytes = buffer.getvalue()
 
@@ -96,17 +106,19 @@ class WebOutputStream(AbstractAudioOutputStream):
             print(f"Error in WebOutputStream play_chunk: {e}")
 
     def stop(self) -> None:
-        # Nothing specific to stop for the web socket itself (handled by server)
-        # But we could signal something if needed.
-        pass
+        """Stop playback on the client."""
+        # Reset timing
+        self.last_chunk_finish_time = 0.0
+        # Send stop signal
+        server.emit_audio_stop(sid=self.sid)
 
     def wait(self) -> None:
-        # So we just return immediately or sleep briefly.
-        pass
+        """Wait for the audio transmission (approximate)."""
+        now = time.time()
+        wait_time = self.last_chunk_finish_time - now
+        if wait_time > 0:
+            time.sleep(wait_time)
 
     def is_playing(self) -> bool:
-        """Check if audio is currently playing.
-
-        For web output, we don't track client playback state.
-        """
-        return False
+        """Check if audio is currently playing."""
+        return time.time() < self.last_chunk_finish_time
