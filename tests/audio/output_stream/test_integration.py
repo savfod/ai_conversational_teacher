@@ -6,6 +6,7 @@ and that the public API is properly exposed.
 """
 
 import tempfile
+import threading
 import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -78,27 +79,63 @@ class TestIntegration:
 
     @pytest.mark.slow
     @patch("conversa.generated.output_stream.speaker.sd.OutputStream")
-    def test_speaker_stream_complete_workflow(self, mock_output_stream):
+    def test_speaker_stream_complete_workflow_slow(self, mock_output_stream):
         """Test complete workflow for speaker output stream."""
         mock_stream_instance = MagicMock()
         mock_output_stream.return_value = mock_stream_instance
 
+        # Capture the callback
+        callback_ref = {}
+
+        # We need to capture the callback passed to the CONSTRUCTOR of the stream
+        # However, mock_output_stream IS the class/constructor mock.
+        # So when SpeakerOutputStream calls sd.OutputStream(...), it calls this mock.
+
+        def side_effect(*args, **kwargs):
+            if "callback" in kwargs:
+                callback_ref["cb"] = kwargs["callback"]
+                callback_ref["blocksize"] = kwargs.get("blocksize", 1600)
+                callback_ref["status"] = kwargs.get("status", None)
+            return mock_stream_instance
+
+        mock_output_stream.side_effect = side_effect
+
         stream = SpeakerOutputStream(sample_rate=16000, channels=1)
 
-        # Play some chunks
-        for _ in range(3):
-            audio_data = np.random.randn(1600).astype(np.float32)
-            stream.play_chunk(audio_data)
+        # Start a thread to simulate the callback
+        stop_event = threading.Event()
 
-        # Wait for playback
-        time.sleep(0.3)
-        stream.wait()
+        def simulate_hardware():
+            while not stop_event.is_set():
+                if "cb" in callback_ref:
+                    # Create dummy buffer
+                    blocksize = callback_ref["blocksize"]
+                    outdata = np.zeros((blocksize, 1), dtype=np.float32)
+                    # Call the callback
+                    callback_ref["cb"](outdata, blocksize, None, None)
+                time.sleep(0.01)  # fast enough simulation
 
-        # Verify stream was started
-        assert mock_stream_instance.start.called
+        sim_thread = threading.Thread(target=simulate_hardware, daemon=True)
+        sim_thread.start()
 
-        # Stop stream
-        stream.stop()
+        try:
+            # Play some chunks
+            for _ in range(3):
+                audio_data = np.random.randn(1600).astype(np.float32)
+                stream.play_chunk(audio_data)
+
+            # Wait for playback
+            # This should now succeed because sim_thread is draining the queue
+            stream.wait()
+
+            # Verify stream was started
+            assert mock_stream_instance.start.called
+
+        finally:
+            stop_event.set()
+            sim_thread.join(timeout=1.0)
+            stream.stop()
+
         assert mock_stream_instance.stop.called
 
     def test_polymorphism(self):

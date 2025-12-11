@@ -43,11 +43,11 @@ def test_hang():
     t = threading.Thread(target=wait_wrapper)
     t.start()
     t.join(timeout=5.0)
+    error = t.is_alive()
+    stream.stop()  # should be called in any case to clean up SpeakerOutputStream
 
-    if t.is_alive():
+    if error:
         print("FAIL: wait() hung for more than 5 seconds!")
-        # Force stop
-        stream.stop()
         raise Exception("wait() hung")
     else:
         print("SUCCESS: wait() returned.")
