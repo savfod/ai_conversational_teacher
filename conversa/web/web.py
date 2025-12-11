@@ -5,7 +5,9 @@ from threading import Thread
 import numpy as np
 
 from conversa.features.llm_api import call_llm
+from conversa.generated.scenario.talk import run_talk_scenario
 from conversa.generated.speech_api import speech_to_text, text_to_speech
+from conversa.util.logs import setup_logging
 from conversa.web import server
 from conversa.web.io import WebInputStream, WebOutputStream
 
@@ -37,7 +39,7 @@ def process_audio(full_audio: np.ndarray, debug: bool = False) -> np.ndarray | N
         return None
 
 
-def audio_worker(debug: bool = False):
+def audio_worker(debug: bool = False, language: str = "en") -> None:
     """
     Continuously collects audio chunks from WebInputStream.
     Accumulates enough samples → process_audio() → send back using WebOutputStream.
@@ -49,11 +51,27 @@ def audio_worker(debug: bool = False):
     input_stream = WebInputStream(sample_rate=16000, channels=1)
     output_stream = WebOutputStream(sample_rate=16000, channels=1)
 
+    if not debug:
+        print("Starting production scenario (Web based)...")
+        # specific try-except to catch interruptions?
+        # run_talk_scenario handles KeyboardInterrupt internally but might re-raise or just print.
+        # It has a finally block that stops streams.
+        # We also have a finally block here.
+        try:
+            run_talk_scenario(input_stream, output_stream, language=language)
+        except Exception as e:
+            print(f"Scenario failed: {e}")
+        finally:
+            # Safety stop if run_talk_scenario didn't
+            input_stream.stop()
+            output_stream.stop()
+        return
+
     input_stream.start()
     # Output stream doesn't need start() strictly but it's good practice if it did
     # output_stream.start()
 
-    print("Streams started. Waiting for audio...")
+    print("Streams started (debug mode). Waiting for audio...")
 
     buffer = np.array([], dtype=np.float32)
 
@@ -89,15 +107,29 @@ def audio_worker(debug: bool = False):
 def arg_parser():
     parser = argparse.ArgumentParser(description="Conversa Web Server")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+    parser.add_argument(
+        "language",
+        default="en",
+        nargs="?",
+        help="Language code for speech recognition and processing (default: en).",
+    )
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Logging level (default: INFO).",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = arg_parser()
+    setup_logging(level=args.log_level)
 
     # Start the worker logic in a separate thread
-    Thread(target=audio_worker, daemon=True, args=(args.debug,)).start()
+    Thread(target=audio_worker, daemon=True, args=(args.debug, args.language)).start()
 
     # Run the server
     # Note: We run this in the main thread as it blocks
-    server.run_server(host="127.0.0.1", port=5557, debug=True)
+    server.run_server(host="127.0.0.1", port=5555, debug=True)
