@@ -59,6 +59,6 @@ def emit_audio_out(data: bytes, sid: Optional[str] = None):
         socketio.emit("audio_out", data)
 
 
-def run_server(host="127.0.0.1", port=5557, debug=True):
+def run_server(host="127.0.0.1", port=5555, debug=True):
     """Run the Flask-SocketIO server."""
     socketio.run(app, host=host, port=port, debug=debug)
