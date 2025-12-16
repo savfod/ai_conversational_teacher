@@ -120,6 +120,12 @@ def arg_parser():
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Logging level (default: INFO).",
     )
+    parser.add_argument(
+        "--host", type=str, default="127.0.0.1", help="Host for the web server"
+    )
+    parser.add_argument(
+        "--port", type=int, default=5555, help="Port for the web server"
+    )
     return parser.parse_args()
 
 
@@ -132,4 +138,4 @@ if __name__ == "__main__":
 
     # Run the server
     # Note: We run this in the main thread as it blocks
-    server.run_server(host="0.0.0.0", port=5555, debug=True)
+    server.run_server(host=args.host, port=args.port, debug=True)

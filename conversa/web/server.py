@@ -74,4 +74,4 @@ def emit_audio_stop(sid: Optional[str] = None):
 
 def run_server(host="127.0.0.1", port=5555, debug=True):
     """Run the Flask-SocketIO server."""
-    socketio.run(app, host=host, port=port, debug=debug)
+    socketio.run(app, host=host, port=port, debug=debug, allow_unsafe_werkzeug=True)
