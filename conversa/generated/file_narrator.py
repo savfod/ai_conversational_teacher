@@ -496,8 +496,10 @@ class ChunkAsyncPreprocessor:
                 self._prepared_chunk = chunk
                 self._preparation_future = None
 
-            except Exception:
-                logger.exception("Error preparing chunk in background")
+            except Exception as e:
+                logger.exception(
+                    f"Error {e} preparing chunk in background, it'll be omitted"
+                )
                 self._preparation_future = None
 
         # chunk_loader -> chunk_to_prepare
